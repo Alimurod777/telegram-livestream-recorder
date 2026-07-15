@@ -58,6 +58,14 @@ from ffmpeg_helper import get_ffmpeg_path, get_ffprobe_path
 logger = logging.getLogger(__name__)
 
 MAX_CHUNK_BYTES = RECORDING_CHUNK_BYTES
+
+# Jitter va aralashtirish uchun modul konstantalari (Yechim 2)
+TICK_MS = 10
+TICK_SAMPLES = AUDIO_SAMPLE_RATE * TICK_MS // 1000
+TICK_BYTES_STEREO = TICK_SAMPLES * AUDIO_CHANNELS * 2
+TICK_BYTES_MONO = TICK_SAMPLES * 2  # FFmpeg'ga har doim 16-bit Mono (1 ta kanal) yuboriladi
+JITTER_BUFFER_MS = 250
+JITTER_BUFFER_TICKS = JITTER_BUFFER_MS // TICK_MS
 MIN_MEDIA_BYTES = 1024
 FFMPEG_STOP_TIMEOUT = 30
 MANIFEST_SUFFIX = ".recording.json"
@@ -344,6 +352,18 @@ class StreamRecorder:
                     )
                     return
 
+    @staticmethod
+    def _downmix_to_mono(data: bytes) -> bytes:
+        """
+        Telegram'dan (v yoki guruh) keladigan interleaved (Stereo) audio baytlarni
+        Mono formatiga o'tkazadi (L+R kanal o'rtachasi).
+        Bu FFmpeg kanal sozlamalarini mustaqil boshqarish uchun xizmat qiladi.
+        """
+        if AUDIO_CHANNELS == 1:
+            return data
+        arr = np.frombuffer(data[:len(data) - len(data) % 4], dtype="<i2").reshape(-1, 2)
+        return arr.mean(axis=1, dtype=np.int32).astype("<i2").tobytes()
+
     def _handle_audio_frames(
         self, session: RecordingSession, update: StreamFrames
     ) -> None:
@@ -352,25 +372,30 @@ class StreamRecorder:
             return
 
         try:
-            if len(payloads) == 1:
-                mixed = payloads[0]
+            # Barcha kiruvchi stereo kadrlarni monoga aylantiramiz
+            mono_payloads = [self._downmix_to_mono(data) for data in payloads]
+
+            if len(mono_payloads) == 1:
+                mixed = mono_payloads[0]
             else:
                 arrays = [
                     np.frombuffer(data[: len(data) - len(data) % 2], dtype="<i2")
-                    for data in payloads
+                    for data in mono_payloads
                 ]
                 sample_count = max(len(samples) for samples in arrays)
                 accumulator = np.zeros(sample_count, dtype=np.int32)
                 for samples in arrays:
                     accumulator[: len(samples)] += samples.astype(np.int32)
-                accumulator = accumulator / math.sqrt(len(arrays))
-                mixed = np.clip(accumulator, -32768, 32767).astype("<i2").tobytes()
+                
+                # Yechim B (Headroom mixing): Spikerlar soniga bo'lish. 
+                # O'rtacha olinayotgani uchun 32767 dan oshib ketmaydi va clip qilmaydi, xirillash (distortion) yo'qoladi.
+                accumulator = accumulator // len(arrays)
+                mixed = accumulator.astype("<i2").tobytes()
 
-            bytes_per_tick = AUDIO_SAMPLE_RATE * AUDIO_CHANNELS * 2 // 100
-            if len(mixed) < bytes_per_tick:
-                mixed = mixed.ljust(bytes_per_tick, b"\0")
-            elif len(mixed) > bytes_per_tick:
-                mixed = mixed[:bytes_per_tick]
+            if len(mixed) < TICK_BYTES_MONO:
+                mixed = mixed.ljust(TICK_BYTES_MONO, b"\0")
+            elif len(mixed) > TICK_BYTES_MONO:
+                mixed = mixed[:TICK_BYTES_MONO]
             session._audio_queue.put_nowait(mixed)
             session._audio_frames += 1
         except queue.Full:
@@ -480,10 +505,12 @@ class StreamRecorder:
             "-ar",
             str(AUDIO_SAMPLE_RATE),
             "-ac",
-            str(AUDIO_CHANNELS),
+            "1",  # Yechim B: Biz har doim Mono stream yuboramiz.
             "-i",
             "pipe:0",
             "-vn",
+            "-af",
+            "dynaudnorm=f=250:p=0.9",  # Yechim B: Balandlikni tiklovchi kompressor
             "-c:a",
             "aac",
             "-b:a",
@@ -583,7 +610,9 @@ class StreamRecorder:
         process = session._audio_process
         if not process or not process.stdin:
             return
-        silence = b"\0" * (AUDIO_SAMPLE_RATE * AUDIO_CHANNELS * 2 // 100)
+        
+        silence = b"\0" * TICK_BYTES_MONO
+        
         while not session._stop_event.is_set():
             if session._capture_started.wait(0.2):
                 break
@@ -593,13 +622,37 @@ class StreamRecorder:
             except OSError:
                 pass
             return
+            
+        # Yechim B: Jitter Buffer.
+        # Tarmoqdagi uzilishlarga (jitter) chidamlilik uchun zaxira to'playmiz.
+        buffered_ticks = 0
+        while not session._stop_event.is_set() and buffered_ticks < JITTER_BUFFER_TICKS:
+            if not session._audio_queue.empty():
+                buffered_ticks = session._audio_queue.qsize()
+                if buffered_ticks >= JITTER_BUFFER_TICKS:
+                    break
+            time.sleep(0.01)
+
         deadline = time.monotonic()
+        fade_factor = 1.0
+        last_chunk_arr = np.zeros(TICK_SAMPLES, dtype=np.int32)
+        
         try:
             while not session._stop_event.is_set() or not session._audio_queue.empty():
                 try:
                     chunk = session._audio_queue.get(timeout=0.01)
+                    fade_factor = 1.0
+                    last_chunk_arr = np.frombuffer(chunk, dtype="<i2").astype(np.int32)
                 except queue.Empty:
-                    chunk = silence
+                    # Yechim B: Agar bufer tugab qolsa (uzoq jimlik yoki nofaollik), 
+                    # "pop" ovozi oldini olish uchun so'nggi ovozni chiziqli nollashtiramiz (fade-out).
+                    if fade_factor > 0:
+                        fade_factor = max(0.0, fade_factor - 0.2)
+                        arr = (last_chunk_arr * fade_factor).astype("<i2")
+                        chunk = arr.tobytes()
+                    else:
+                        chunk = silence
+                
                 process.stdin.write(chunk)
                 deadline += 0.01
                 delay = deadline - time.monotonic()
