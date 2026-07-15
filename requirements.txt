@@ -1,0 +1,10 @@
+pyrofork==2.3.58
+tgcrypto==1.2.5
+py-tgcalls==2.2.8
+ntgcalls>=1.2.0
+qrcode==7.4.2
+pillow>=10.2.0
+aiofiles>=24.1.0
+ffmpeg-python==0.2.0
+static-ffmpeg>=2.7
+numpy>=1.26.4

@@ -1,0 +1,6 @@
+pyrofork==2.3.58
+tgcrypto==1.2.5
+aiofiles>=24.1.0
+ffmpeg-python==0.2.0
+static-ffmpeg>=2.7
+numpy>=1.26.4

@@ -1,0 +1,9 @@
+[INIT] Starting imports...
+============================================================
+  TELEGRAM LIVE STREAM RECORDER
+============================================================
+[OK] Configuration loaded
+[OK] FFmpeg found: C:\Users\User\loyiha\record\venv\lib\site-packages\static_ffmpeg\bin\win32\ffmpeg.EXE
+[OK] Bot API polling as @aloqasecretapp_bot
+[INFO] Send /start to @aloqasecretapp_bot
+============================================================

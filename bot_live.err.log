@@ -1,0 +1,2130 @@
+2026-07-14 21:42:43,177 - __main__ - ERROR - Polling error, retry in 3s: The read operation timed out
+Traceback (most recent call last):
+  File "C:\Users\User\loyiha\record\bot.py", line 748, in main
+    response = await get_updates(offset)
+  File "C:\Users\User\loyiha\record\bot.py", line 282, in get_updates
+    return await asyncio.to_thread(run)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\asyncio\threads.py", line 25, in to_thread
+    return await loop.run_in_executor(None, func_call)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\concurrent\futures\thread.py", line 58, in run
+    result = self.fn(*self.args, **self.kwargs)
+  File "C:\Users\User\loyiha\record\bot.py", line 281, in run
+    return bot_api("getUpdates", data, timeout=35)
+  File "C:\Users\User\loyiha\record\bot.py", line 210, in bot_api
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 216, in urlopen
+    return opener.open(url, data, timeout)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 519, in open
+    response = self._open(req, data)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 536, in _open
+    result = self._call_chain(self.handle_open, protocol, protocol +
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 496, in _call_chain
+    result = func(*args)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 1391, in https_open
+    return self.do_open(http.client.HTTPSConnection, req,
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 1352, in do_open
+    r = h.getresponse()
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1374, in getresponse
+    response.begin()
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 318, in begin
+    version, status, reason = self._read_status()
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 279, in _read_status
+    line = str(self.fp.readline(_MAXLINE + 1), "iso-8859-1")
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\socket.py", line 705, in readinto
+    return self._sock.recv_into(b)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\ssl.py", line 1274, in recv_into
+    return self.read(nbytes, buffer)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\ssl.py", line 1130, in read
+    return self._sslobj.read(len, buffer)
+TimeoutError: The read operation timed out
+2026-07-14 21:43:08,506 - __main__ - ERROR - Bot API getUpdates network error: [WinError 10060] Попытка установить соединение была безуспешной, т.к. от другого компьютера за требуемое время не получен нужный отклик, или было разорвано уже установленное соединение из-за неверного отклика уже подключенного компьютера
+2026-07-14 21:43:08,506 - __main__ - ERROR - Polling error, retry in 6s: <urlopen error [WinError 10060] Попытка установить соединение была безуспешной, т.к. от другого компьютера за требуемое время не получен нужный отклик, или было разорвано уже установленное соединение из-за неверного отклика уже подключенного компьютера>
+Traceback (most recent call last):
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 1348, in do_open
+    h.request(req.get_method(), req.selector, req.data, headers,
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1282, in request
+    self._send_request(method, url, body, headers, encode_chunked)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1328, in _send_request
+    self.endheaders(body, encode_chunked=encode_chunked)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1277, in endheaders
+    self._send_output(message_body, encode_chunked=encode_chunked)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1037, in _send_output
+    self.send(msg)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 975, in send
+    self.connect()
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1447, in connect
+    super().connect()
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 941, in connect
+    self.sock = self._create_connection(
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\socket.py", line 845, in create_connection
+    raise err
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\socket.py", line 833, in create_connection
+    sock.connect(sa)
+TimeoutError: [WinError 10060] Попытка установить соединение была безуспешной, т.к. от другого компьютера за требуемое время не получен нужный отклик, или было разорвано уже установленное соединение из-за неверного отклика уже подключенного компьютера
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\User\loyiha\record\bot.py", line 748, in main
+    response = await get_updates(offset)
+  File "C:\Users\User\loyiha\record\bot.py", line 282, in get_updates
+    return await asyncio.to_thread(run)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\asyncio\threads.py", line 25, in to_thread
+    return await loop.run_in_executor(None, func_call)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\concurrent\futures\thread.py", line 58, in run
+    result = self.fn(*self.args, **self.kwargs)
+  File "C:\Users\User\loyiha\record\bot.py", line 281, in run
+    return bot_api("getUpdates", data, timeout=35)
+  File "C:\Users\User\loyiha\record\bot.py", line 210, in bot_api
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 216, in urlopen
+    return opener.open(url, data, timeout)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 519, in open
+    response = self._open(req, data)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 536, in _open
+    result = self._call_chain(self.handle_open, protocol, protocol +
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 496, in _call_chain
+    result = func(*args)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 1391, in https_open
+    return self.do_open(http.client.HTTPSConnection, req,
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 1351, in do_open
+    raise URLError(err)
+urllib.error.URLError: <urlopen error [WinError 10060] Попытка установить соединение была безуспешной, т.к. от другого компьютера за требуемое время не получен нужный отклик, или было разорвано уже установленное соединение из-за неверного отклика уже подключенного компьютера>
+2026-07-14 21:43:25,749 - __main__ - ERROR - Bot API getUpdates network error: [Errno 11001] getaddrinfo failed
+2026-07-14 21:43:25,749 - __main__ - ERROR - Polling error, retry in 12s: <urlopen error [Errno 11001] getaddrinfo failed>
+Traceback (most recent call last):
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 1348, in do_open
+    h.request(req.get_method(), req.selector, req.data, headers,
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1282, in request
+    self._send_request(method, url, body, headers, encode_chunked)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1328, in _send_request
+    self.endheaders(body, encode_chunked=encode_chunked)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1277, in endheaders
+    self._send_output(message_body, encode_chunked=encode_chunked)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1037, in _send_output
+    self.send(msg)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 975, in send
+    self.connect()
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1447, in connect
+    super().connect()
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 941, in connect
+    self.sock = self._create_connection(
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\socket.py", line 824, in create_connection
+    for res in getaddrinfo(host, port, 0, SOCK_STREAM):
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\socket.py", line 955, in getaddrinfo
+    for res in _socket.getaddrinfo(host, port, family, type, proto, flags):
+socket.gaierror: [Errno 11001] getaddrinfo failed
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\User\loyiha\record\bot.py", line 748, in main
+    response = await get_updates(offset)
+  File "C:\Users\User\loyiha\record\bot.py", line 282, in get_updates
+    return await asyncio.to_thread(run)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\asyncio\threads.py", line 25, in to_thread
+    return await loop.run_in_executor(None, func_call)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\concurrent\futures\thread.py", line 58, in run
+    result = self.fn(*self.args, **self.kwargs)
+  File "C:\Users\User\loyiha\record\bot.py", line 281, in run
+    return bot_api("getUpdates", data, timeout=35)
+  File "C:\Users\User\loyiha\record\bot.py", line 210, in bot_api
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 216, in urlopen
+    return opener.open(url, data, timeout)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 519, in open
+    response = self._open(req, data)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 536, in _open
+    result = self._call_chain(self.handle_open, protocol, protocol +
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 496, in _call_chain
+    result = func(*args)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 1391, in https_open
+    return self.do_open(http.client.HTTPSConnection, req,
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 1351, in do_open
+    raise URLError(err)
+urllib.error.URLError: <urlopen error [Errno 11001] getaddrinfo failed>
+2026-07-14 21:43:48,962 - __main__ - ERROR - Bot API getUpdates network error: [Errno 11001] getaddrinfo failed
+2026-07-14 21:43:48,994 - __main__ - ERROR - Polling error, retry in 24s: <urlopen error [Errno 11001] getaddrinfo failed>
+Traceback (most recent call last):
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 1348, in do_open
+    h.request(req.get_method(), req.selector, req.data, headers,
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1282, in request
+    self._send_request(method, url, body, headers, encode_chunked)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1328, in _send_request
+    self.endheaders(body, encode_chunked=encode_chunked)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1277, in endheaders
+    self._send_output(message_body, encode_chunked=encode_chunked)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1037, in _send_output
+    self.send(msg)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 975, in send
+    self.connect()
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1447, in connect
+    super().connect()
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 941, in connect
+    self.sock = self._create_connection(
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\socket.py", line 824, in create_connection
+    for res in getaddrinfo(host, port, 0, SOCK_STREAM):
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\socket.py", line 955, in getaddrinfo
+    for res in _socket.getaddrinfo(host, port, family, type, proto, flags):
+socket.gaierror: [Errno 11001] getaddrinfo failed
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\User\loyiha\record\bot.py", line 748, in main
+    response = await get_updates(offset)
+  File "C:\Users\User\loyiha\record\bot.py", line 282, in get_updates
+    return await asyncio.to_thread(run)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\asyncio\threads.py", line 25, in to_thread
+    return await loop.run_in_executor(None, func_call)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\concurrent\futures\thread.py", line 58, in run
+    result = self.fn(*self.args, **self.kwargs)
+  File "C:\Users\User\loyiha\record\bot.py", line 281, in run
+    return bot_api("getUpdates", data, timeout=35)
+  File "C:\Users\User\loyiha\record\bot.py", line 210, in bot_api
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 216, in urlopen
+    return opener.open(url, data, timeout)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 519, in open
+    response = self._open(req, data)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 536, in _open
+    result = self._call_chain(self.handle_open, protocol, protocol +
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 496, in _call_chain
+    result = func(*args)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 1391, in https_open
+    return self.do_open(http.client.HTTPSConnection, req,
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 1351, in do_open
+    raise URLError(err)
+urllib.error.URLError: <urlopen error [Errno 11001] getaddrinfo failed>
+2026-07-14 21:44:13,059 - __main__ - ERROR - Bot API getUpdates network error: [Errno 11001] getaddrinfo failed
+2026-07-14 21:44:13,078 - __main__ - ERROR - Polling error, retry in 48s: <urlopen error [Errno 11001] getaddrinfo failed>
+Traceback (most recent call last):
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 1348, in do_open
+    h.request(req.get_method(), req.selector, req.data, headers,
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1282, in request
+    self._send_request(method, url, body, headers, encode_chunked)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1328, in _send_request
+    self.endheaders(body, encode_chunked=encode_chunked)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1277, in endheaders
+    self._send_output(message_body, encode_chunked=encode_chunked)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1037, in _send_output
+    self.send(msg)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 975, in send
+    self.connect()
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1447, in connect
+    super().connect()
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 941, in connect
+    self.sock = self._create_connection(
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\socket.py", line 824, in create_connection
+    for res in getaddrinfo(host, port, 0, SOCK_STREAM):
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\socket.py", line 955, in getaddrinfo
+    for res in _socket.getaddrinfo(host, port, family, type, proto, flags):
+socket.gaierror: [Errno 11001] getaddrinfo failed
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\User\loyiha\record\bot.py", line 748, in main
+    response = await get_updates(offset)
+  File "C:\Users\User\loyiha\record\bot.py", line 282, in get_updates
+    return await asyncio.to_thread(run)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\asyncio\threads.py", line 25, in to_thread
+    return await loop.run_in_executor(None, func_call)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\concurrent\futures\thread.py", line 58, in run
+    result = self.fn(*self.args, **self.kwargs)
+  File "C:\Users\User\loyiha\record\bot.py", line 281, in run
+    return bot_api("getUpdates", data, timeout=35)
+  File "C:\Users\User\loyiha\record\bot.py", line 210, in bot_api
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 216, in urlopen
+    return opener.open(url, data, timeout)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 519, in open
+    response = self._open(req, data)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 536, in _open
+    result = self._call_chain(self.handle_open, protocol, protocol +
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 496, in _call_chain
+    result = func(*args)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 1391, in https_open
+    return self.do_open(http.client.HTTPSConnection, req,
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 1351, in do_open
+    raise URLError(err)
+urllib.error.URLError: <urlopen error [Errno 11001] getaddrinfo failed>
+2026-07-14 21:45:12,273 - __main__ - ERROR - Bot API getUpdates network error: [Errno 11001] getaddrinfo failed
+2026-07-14 21:45:12,288 - __main__ - ERROR - Polling error, retry in 60s: <urlopen error [Errno 11001] getaddrinfo failed>
+Traceback (most recent call last):
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 1348, in do_open
+    h.request(req.get_method(), req.selector, req.data, headers,
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1282, in request
+    self._send_request(method, url, body, headers, encode_chunked)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1328, in _send_request
+    self.endheaders(body, encode_chunked=encode_chunked)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1277, in endheaders
+    self._send_output(message_body, encode_chunked=encode_chunked)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1037, in _send_output
+    self.send(msg)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 975, in send
+    self.connect()
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1447, in connect
+    super().connect()
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 941, in connect
+    self.sock = self._create_connection(
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\socket.py", line 824, in create_connection
+    for res in getaddrinfo(host, port, 0, SOCK_STREAM):
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\socket.py", line 955, in getaddrinfo
+    for res in _socket.getaddrinfo(host, port, family, type, proto, flags):
+socket.gaierror: [Errno 11001] getaddrinfo failed
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\User\loyiha\record\bot.py", line 748, in main
+    response = await get_updates(offset)
+  File "C:\Users\User\loyiha\record\bot.py", line 282, in get_updates
+    return await asyncio.to_thread(run)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\asyncio\threads.py", line 25, in to_thread
+    return await loop.run_in_executor(None, func_call)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\concurrent\futures\thread.py", line 58, in run
+    result = self.fn(*self.args, **self.kwargs)
+  File "C:\Users\User\loyiha\record\bot.py", line 281, in run
+    return bot_api("getUpdates", data, timeout=35)
+  File "C:\Users\User\loyiha\record\bot.py", line 210, in bot_api
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 216, in urlopen
+    return opener.open(url, data, timeout)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 519, in open
+    response = self._open(req, data)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 536, in _open
+    result = self._call_chain(self.handle_open, protocol, protocol +
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 496, in _call_chain
+    result = func(*args)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 1391, in https_open
+    return self.do_open(http.client.HTTPSConnection, req,
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 1351, in do_open
+    raise URLError(err)
+urllib.error.URLError: <urlopen error [Errno 11001] getaddrinfo failed>
+2026-07-14 21:46:23,505 - __main__ - ERROR - Bot API getUpdates network error: [Errno 11001] getaddrinfo failed
+2026-07-14 21:46:23,624 - __main__ - ERROR - Polling error, retry in 60s: <urlopen error [Errno 11001] getaddrinfo failed>
+Traceback (most recent call last):
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 1348, in do_open
+    h.request(req.get_method(), req.selector, req.data, headers,
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1282, in request
+    self._send_request(method, url, body, headers, encode_chunked)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1328, in _send_request
+    self.endheaders(body, encode_chunked=encode_chunked)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1277, in endheaders
+    self._send_output(message_body, encode_chunked=encode_chunked)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1037, in _send_output
+    self.send(msg)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 975, in send
+    self.connect()
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1447, in connect
+    super().connect()
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 941, in connect
+    self.sock = self._create_connection(
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\socket.py", line 824, in create_connection
+    for res in getaddrinfo(host, port, 0, SOCK_STREAM):
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\socket.py", line 955, in getaddrinfo
+    for res in _socket.getaddrinfo(host, port, family, type, proto, flags):
+socket.gaierror: [Errno 11001] getaddrinfo failed
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\User\loyiha\record\bot.py", line 748, in main
+    response = await get_updates(offset)
+  File "C:\Users\User\loyiha\record\bot.py", line 282, in get_updates
+    return await asyncio.to_thread(run)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\asyncio\threads.py", line 25, in to_thread
+    return await loop.run_in_executor(None, func_call)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\concurrent\futures\thread.py", line 58, in run
+    result = self.fn(*self.args, **self.kwargs)
+  File "C:\Users\User\loyiha\record\bot.py", line 281, in run
+    return bot_api("getUpdates", data, timeout=35)
+  File "C:\Users\User\loyiha\record\bot.py", line 210, in bot_api
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 216, in urlopen
+    return opener.open(url, data, timeout)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 519, in open
+    response = self._open(req, data)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 536, in _open
+    result = self._call_chain(self.handle_open, protocol, protocol +
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 496, in _call_chain
+    result = func(*args)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 1391, in https_open
+    return self.do_open(http.client.HTTPSConnection, req,
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 1351, in do_open
+    raise URLError(err)
+urllib.error.URLError: <urlopen error [Errno 11001] getaddrinfo failed>
+2026-07-14 21:50:14,025 - __main__ - ERROR - Polling error, retry in 3s: The read operation timed out
+Traceback (most recent call last):
+  File "C:\Users\User\loyiha\record\bot.py", line 748, in main
+    response = await get_updates(offset)
+  File "C:\Users\User\loyiha\record\bot.py", line 282, in get_updates
+    return await asyncio.to_thread(run)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\asyncio\threads.py", line 25, in to_thread
+    return await loop.run_in_executor(None, func_call)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\concurrent\futures\thread.py", line 58, in run
+    result = self.fn(*self.args, **self.kwargs)
+  File "C:\Users\User\loyiha\record\bot.py", line 281, in run
+    return bot_api("getUpdates", data, timeout=35)
+  File "C:\Users\User\loyiha\record\bot.py", line 210, in bot_api
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 216, in urlopen
+    return opener.open(url, data, timeout)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 519, in open
+    response = self._open(req, data)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 536, in _open
+    result = self._call_chain(self.handle_open, protocol, protocol +
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 496, in _call_chain
+    result = func(*args)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 1391, in https_open
+    return self.do_open(http.client.HTTPSConnection, req,
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 1352, in do_open
+    r = h.getresponse()
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1374, in getresponse
+    response.begin()
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 318, in begin
+    version, status, reason = self._read_status()
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 279, in _read_status
+    line = str(self.fp.readline(_MAXLINE + 1), "iso-8859-1")
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\socket.py", line 705, in readinto
+    return self._sock.recv_into(b)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\ssl.py", line 1274, in recv_into
+    return self.read(nbytes, buffer)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\ssl.py", line 1130, in read
+    return self._sslobj.read(len, buffer)
+TimeoutError: The read operation timed out
+2026-07-14 21:52:30,321 - __main__ - ERROR - Polling error, retry in 3s: The read operation timed out
+Traceback (most recent call last):
+  File "C:\Users\User\loyiha\record\bot.py", line 748, in main
+    response = await get_updates(offset)
+  File "C:\Users\User\loyiha\record\bot.py", line 282, in get_updates
+    return await asyncio.to_thread(run)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\asyncio\threads.py", line 25, in to_thread
+    return await loop.run_in_executor(None, func_call)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\concurrent\futures\thread.py", line 58, in run
+    result = self.fn(*self.args, **self.kwargs)
+  File "C:\Users\User\loyiha\record\bot.py", line 281, in run
+    return bot_api("getUpdates", data, timeout=35)
+  File "C:\Users\User\loyiha\record\bot.py", line 210, in bot_api
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 216, in urlopen
+    return opener.open(url, data, timeout)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 519, in open
+    response = self._open(req, data)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 536, in _open
+    result = self._call_chain(self.handle_open, protocol, protocol +
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 496, in _call_chain
+    result = func(*args)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 1391, in https_open
+    return self.do_open(http.client.HTTPSConnection, req,
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 1352, in do_open
+    r = h.getresponse()
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1374, in getresponse
+    response.begin()
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 318, in begin
+    version, status, reason = self._read_status()
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 279, in _read_status
+    line = str(self.fp.readline(_MAXLINE + 1), "iso-8859-1")
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\socket.py", line 705, in readinto
+    return self._sock.recv_into(b)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\ssl.py", line 1274, in recv_into
+    return self.read(nbytes, buffer)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\ssl.py", line 1130, in read
+    return self._sslobj.read(len, buffer)
+TimeoutError: The read operation timed out
+2026-07-14 21:53:30,829 - __main__ - ERROR - Polling error, retry in 6s: The read operation timed out
+Traceback (most recent call last):
+  File "C:\Users\User\loyiha\record\bot.py", line 748, in main
+    response = await get_updates(offset)
+  File "C:\Users\User\loyiha\record\bot.py", line 282, in get_updates
+    return await asyncio.to_thread(run)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\asyncio\threads.py", line 25, in to_thread
+    return await loop.run_in_executor(None, func_call)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\concurrent\futures\thread.py", line 58, in run
+    result = self.fn(*self.args, **self.kwargs)
+  File "C:\Users\User\loyiha\record\bot.py", line 281, in run
+    return bot_api("getUpdates", data, timeout=35)
+  File "C:\Users\User\loyiha\record\bot.py", line 210, in bot_api
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 216, in urlopen
+    return opener.open(url, data, timeout)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 519, in open
+    response = self._open(req, data)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 536, in _open
+    result = self._call_chain(self.handle_open, protocol, protocol +
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 496, in _call_chain
+    result = func(*args)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 1391, in https_open
+    return self.do_open(http.client.HTTPSConnection, req,
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 1352, in do_open
+    r = h.getresponse()
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1374, in getresponse
+    response.begin()
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 318, in begin
+    version, status, reason = self._read_status()
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 279, in _read_status
+    line = str(self.fp.readline(_MAXLINE + 1), "iso-8859-1")
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\socket.py", line 705, in readinto
+    return self._sock.recv_into(b)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\ssl.py", line 1274, in recv_into
+    return self.read(nbytes, buffer)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\ssl.py", line 1130, in read
+    return self._sslobj.read(len, buffer)
+TimeoutError: The read operation timed out
+2026-07-14 21:53:49,259 - __main__ - ERROR - Bot API getUpdates network error: [Errno 11001] getaddrinfo failed
+2026-07-14 21:53:49,276 - __main__ - ERROR - Polling error, retry in 12s: <urlopen error [Errno 11001] getaddrinfo failed>
+Traceback (most recent call last):
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 1348, in do_open
+    h.request(req.get_method(), req.selector, req.data, headers,
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1282, in request
+    self._send_request(method, url, body, headers, encode_chunked)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1328, in _send_request
+    self.endheaders(body, encode_chunked=encode_chunked)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1277, in endheaders
+    self._send_output(message_body, encode_chunked=encode_chunked)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1037, in _send_output
+    self.send(msg)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 975, in send
+    self.connect()
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1447, in connect
+    super().connect()
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 941, in connect
+    self.sock = self._create_connection(
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\socket.py", line 824, in create_connection
+    for res in getaddrinfo(host, port, 0, SOCK_STREAM):
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\socket.py", line 955, in getaddrinfo
+    for res in _socket.getaddrinfo(host, port, family, type, proto, flags):
+socket.gaierror: [Errno 11001] getaddrinfo failed
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\User\loyiha\record\bot.py", line 748, in main
+    response = await get_updates(offset)
+  File "C:\Users\User\loyiha\record\bot.py", line 282, in get_updates
+    return await asyncio.to_thread(run)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\asyncio\threads.py", line 25, in to_thread
+    return await loop.run_in_executor(None, func_call)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\concurrent\futures\thread.py", line 58, in run
+    result = self.fn(*self.args, **self.kwargs)
+  File "C:\Users\User\loyiha\record\bot.py", line 281, in run
+    return bot_api("getUpdates", data, timeout=35)
+  File "C:\Users\User\loyiha\record\bot.py", line 210, in bot_api
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 216, in urlopen
+    return opener.open(url, data, timeout)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 519, in open
+    response = self._open(req, data)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 536, in _open
+    result = self._call_chain(self.handle_open, protocol, protocol +
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 496, in _call_chain
+    result = func(*args)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 1391, in https_open
+    return self.do_open(http.client.HTTPSConnection, req,
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 1351, in do_open
+    raise URLError(err)
+urllib.error.URLError: <urlopen error [Errno 11001] getaddrinfo failed>
+2026-07-14 21:54:14,629 - __main__ - ERROR - Bot API getUpdates network error: [Errno 11001] getaddrinfo failed
+2026-07-14 21:54:14,650 - __main__ - ERROR - Polling error, retry in 24s: <urlopen error [Errno 11001] getaddrinfo failed>
+Traceback (most recent call last):
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 1348, in do_open
+    h.request(req.get_method(), req.selector, req.data, headers,
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1282, in request
+    self._send_request(method, url, body, headers, encode_chunked)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1328, in _send_request
+    self.endheaders(body, encode_chunked=encode_chunked)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1277, in endheaders
+    self._send_output(message_body, encode_chunked=encode_chunked)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1037, in _send_output
+    self.send(msg)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 975, in send
+    self.connect()
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1447, in connect
+    super().connect()
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 941, in connect
+    self.sock = self._create_connection(
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\socket.py", line 824, in create_connection
+    for res in getaddrinfo(host, port, 0, SOCK_STREAM):
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\socket.py", line 955, in getaddrinfo
+    for res in _socket.getaddrinfo(host, port, family, type, proto, flags):
+socket.gaierror: [Errno 11001] getaddrinfo failed
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\User\loyiha\record\bot.py", line 748, in main
+    response = await get_updates(offset)
+  File "C:\Users\User\loyiha\record\bot.py", line 282, in get_updates
+    return await asyncio.to_thread(run)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\asyncio\threads.py", line 25, in to_thread
+    return await loop.run_in_executor(None, func_call)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\concurrent\futures\thread.py", line 58, in run
+    result = self.fn(*self.args, **self.kwargs)
+  File "C:\Users\User\loyiha\record\bot.py", line 281, in run
+    return bot_api("getUpdates", data, timeout=35)
+  File "C:\Users\User\loyiha\record\bot.py", line 210, in bot_api
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 216, in urlopen
+    return opener.open(url, data, timeout)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 519, in open
+    response = self._open(req, data)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 536, in _open
+    result = self._call_chain(self.handle_open, protocol, protocol +
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 496, in _call_chain
+    result = func(*args)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 1391, in https_open
+    return self.do_open(http.client.HTTPSConnection, req,
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 1351, in do_open
+    raise URLError(err)
+urllib.error.URLError: <urlopen error [Errno 11001] getaddrinfo failed>
+2026-07-14 21:55:00,816 - __main__ - ERROR - Bot API getUpdates network error: [WinError 10060] Попытка установить соединение была безуспешной, т.к. от другого компьютера за требуемое время не получен нужный отклик, или было разорвано уже установленное соединение из-за неверного отклика уже подключенного компьютера
+2026-07-14 21:55:00,935 - __main__ - ERROR - Polling error, retry in 48s: <urlopen error [WinError 10060] Попытка установить соединение была безуспешной, т.к. от другого компьютера за требуемое время не получен нужный отклик, или было разорвано уже установленное соединение из-за неверного отклика уже подключенного компьютера>
+Traceback (most recent call last):
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 1348, in do_open
+    h.request(req.get_method(), req.selector, req.data, headers,
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1282, in request
+    self._send_request(method, url, body, headers, encode_chunked)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1328, in _send_request
+    self.endheaders(body, encode_chunked=encode_chunked)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1277, in endheaders
+    self._send_output(message_body, encode_chunked=encode_chunked)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1037, in _send_output
+    self.send(msg)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 975, in send
+    self.connect()
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1447, in connect
+    super().connect()
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 941, in connect
+    self.sock = self._create_connection(
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\socket.py", line 845, in create_connection
+    raise err
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\socket.py", line 833, in create_connection
+    sock.connect(sa)
+TimeoutError: [WinError 10060] Попытка установить соединение была безуспешной, т.к. от другого компьютера за требуемое время не получен нужный отклик, или было разорвано уже установленное соединение из-за неверного отклика уже подключенного компьютера
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\User\loyiha\record\bot.py", line 748, in main
+    response = await get_updates(offset)
+  File "C:\Users\User\loyiha\record\bot.py", line 282, in get_updates
+    return await asyncio.to_thread(run)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\asyncio\threads.py", line 25, in to_thread
+    return await loop.run_in_executor(None, func_call)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\concurrent\futures\thread.py", line 58, in run
+    result = self.fn(*self.args, **self.kwargs)
+  File "C:\Users\User\loyiha\record\bot.py", line 281, in run
+    return bot_api("getUpdates", data, timeout=35)
+  File "C:\Users\User\loyiha\record\bot.py", line 210, in bot_api
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 216, in urlopen
+    return opener.open(url, data, timeout)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 519, in open
+    response = self._open(req, data)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 536, in _open
+    result = self._call_chain(self.handle_open, protocol, protocol +
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 496, in _call_chain
+    result = func(*args)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 1391, in https_open
+    return self.do_open(http.client.HTTPSConnection, req,
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 1351, in do_open
+    raise URLError(err)
+urllib.error.URLError: <urlopen error [WinError 10060] Попытка установить соединение была безуспешной, т.к. от другого компьютера за требуемое время не получен нужный отклик, или было разорвано уже установленное соединение из-за неверного отклика уже подключенного компьютера>
+2026-07-14 21:56:10,272 - __main__ - ERROR - Bot API getUpdates network error: [WinError 10060] Попытка установить соединение была безуспешной, т.к. от другого компьютера за требуемое время не получен нужный отклик, или было разорвано уже установленное соединение из-за неверного отклика уже подключенного компьютера
+2026-07-14 21:56:10,339 - __main__ - ERROR - Polling error, retry in 60s: <urlopen error [WinError 10060] Попытка установить соединение была безуспешной, т.к. от другого компьютера за требуемое время не получен нужный отклик, или было разорвано уже установленное соединение из-за неверного отклика уже подключенного компьютера>
+Traceback (most recent call last):
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 1348, in do_open
+    h.request(req.get_method(), req.selector, req.data, headers,
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1282, in request
+    self._send_request(method, url, body, headers, encode_chunked)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1328, in _send_request
+    self.endheaders(body, encode_chunked=encode_chunked)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1277, in endheaders
+    self._send_output(message_body, encode_chunked=encode_chunked)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1037, in _send_output
+    self.send(msg)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 975, in send
+    self.connect()
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1447, in connect
+    super().connect()
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 941, in connect
+    self.sock = self._create_connection(
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\socket.py", line 845, in create_connection
+    raise err
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\socket.py", line 833, in create_connection
+    sock.connect(sa)
+TimeoutError: [WinError 10060] Попытка установить соединение была безуспешной, т.к. от другого компьютера за требуемое время не получен нужный отклик, или было разорвано уже установленное соединение из-за неверного отклика уже подключенного компьютера
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\User\loyiha\record\bot.py", line 748, in main
+    response = await get_updates(offset)
+  File "C:\Users\User\loyiha\record\bot.py", line 282, in get_updates
+    return await asyncio.to_thread(run)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\asyncio\threads.py", line 25, in to_thread
+    return await loop.run_in_executor(None, func_call)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\concurrent\futures\thread.py", line 58, in run
+    result = self.fn(*self.args, **self.kwargs)
+  File "C:\Users\User\loyiha\record\bot.py", line 281, in run
+    return bot_api("getUpdates", data, timeout=35)
+  File "C:\Users\User\loyiha\record\bot.py", line 210, in bot_api
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 216, in urlopen
+    return opener.open(url, data, timeout)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 519, in open
+    response = self._open(req, data)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 536, in _open
+    result = self._call_chain(self.handle_open, protocol, protocol +
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 496, in _call_chain
+    result = func(*args)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 1391, in https_open
+    return self.do_open(http.client.HTTPSConnection, req,
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 1351, in do_open
+    raise URLError(err)
+urllib.error.URLError: <urlopen error [WinError 10060] Попытка установить соединение была безуспешной, т.к. от другого компьютера за требуемое время не получен нужный отклик, или было разорвано уже установленное соединение из-за неверного отклика уже подключенного компьютера>
+2026-07-14 21:57:31,539 - __main__ - ERROR - Bot API getUpdates network error: [WinError 10060] Попытка установить соединение была безуспешной, т.к. от другого компьютера за требуемое время не получен нужный отклик, или было разорвано уже установленное соединение из-за неверного отклика уже подключенного компьютера
+2026-07-14 21:57:31,618 - __main__ - ERROR - Polling error, retry in 60s: <urlopen error [WinError 10060] Попытка установить соединение была безуспешной, т.к. от другого компьютера за требуемое время не получен нужный отклик, или было разорвано уже установленное соединение из-за неверного отклика уже подключенного компьютера>
+Traceback (most recent call last):
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 1348, in do_open
+    h.request(req.get_method(), req.selector, req.data, headers,
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1282, in request
+    self._send_request(method, url, body, headers, encode_chunked)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1328, in _send_request
+    self.endheaders(body, encode_chunked=encode_chunked)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1277, in endheaders
+    self._send_output(message_body, encode_chunked=encode_chunked)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1037, in _send_output
+    self.send(msg)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 975, in send
+    self.connect()
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1447, in connect
+    super().connect()
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 941, in connect
+    self.sock = self._create_connection(
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\socket.py", line 845, in create_connection
+    raise err
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\socket.py", line 833, in create_connection
+    sock.connect(sa)
+TimeoutError: [WinError 10060] Попытка установить соединение была безуспешной, т.к. от другого компьютера за требуемое время не получен нужный отклик, или было разорвано уже установленное соединение из-за неверного отклика уже подключенного компьютера
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\User\loyiha\record\bot.py", line 748, in main
+    response = await get_updates(offset)
+  File "C:\Users\User\loyiha\record\bot.py", line 282, in get_updates
+    return await asyncio.to_thread(run)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\asyncio\threads.py", line 25, in to_thread
+    return await loop.run_in_executor(None, func_call)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\concurrent\futures\thread.py", line 58, in run
+    result = self.fn(*self.args, **self.kwargs)
+  File "C:\Users\User\loyiha\record\bot.py", line 281, in run
+    return bot_api("getUpdates", data, timeout=35)
+  File "C:\Users\User\loyiha\record\bot.py", line 210, in bot_api
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 216, in urlopen
+    return opener.open(url, data, timeout)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 519, in open
+    response = self._open(req, data)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 536, in _open
+    result = self._call_chain(self.handle_open, protocol, protocol +
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 496, in _call_chain
+    result = func(*args)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 1391, in https_open
+    return self.do_open(http.client.HTTPSConnection, req,
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 1351, in do_open
+    raise URLError(err)
+urllib.error.URLError: <urlopen error [WinError 10060] Попытка установить соединение была безуспешной, т.к. от другого компьютера за требуемое время не получен нужный отклик, или было разорвано уже установленное соединение из-за неверного отклика уже подключенного компьютера>
+2026-07-14 22:04:34,663 - __main__ - ERROR - Polling error, retry in 3s: The read operation timed out
+Traceback (most recent call last):
+  File "C:\Users\User\loyiha\record\bot.py", line 748, in main
+    response = await get_updates(offset)
+  File "C:\Users\User\loyiha\record\bot.py", line 282, in get_updates
+    return await asyncio.to_thread(run)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\asyncio\threads.py", line 25, in to_thread
+    return await loop.run_in_executor(None, func_call)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\concurrent\futures\thread.py", line 58, in run
+    result = self.fn(*self.args, **self.kwargs)
+  File "C:\Users\User\loyiha\record\bot.py", line 281, in run
+    return bot_api("getUpdates", data, timeout=35)
+  File "C:\Users\User\loyiha\record\bot.py", line 210, in bot_api
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 216, in urlopen
+    return opener.open(url, data, timeout)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 519, in open
+    response = self._open(req, data)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 536, in _open
+    result = self._call_chain(self.handle_open, protocol, protocol +
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 496, in _call_chain
+    result = func(*args)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 1391, in https_open
+    return self.do_open(http.client.HTTPSConnection, req,
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 1352, in do_open
+    r = h.getresponse()
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1374, in getresponse
+    response.begin()
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 318, in begin
+    version, status, reason = self._read_status()
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 279, in _read_status
+    line = str(self.fp.readline(_MAXLINE + 1), "iso-8859-1")
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\socket.py", line 705, in readinto
+    return self._sock.recv_into(b)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\ssl.py", line 1274, in recv_into
+    return self.read(nbytes, buffer)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\ssl.py", line 1130, in read
+    return self._sslobj.read(len, buffer)
+TimeoutError: The read operation timed out
+2026-07-14 22:04:58,867 - __main__ - ERROR - Bot API getUpdates network error: [WinError 10060] Попытка установить соединение была безуспешной, т.к. от другого компьютера за требуемое время не получен нужный отклик, или было разорвано уже установленное соединение из-за неверного отклика уже подключенного компьютера
+2026-07-14 22:04:58,867 - __main__ - ERROR - Polling error, retry in 6s: <urlopen error [WinError 10060] Попытка установить соединение была безуспешной, т.к. от другого компьютера за требуемое время не получен нужный отклик, или было разорвано уже установленное соединение из-за неверного отклика уже подключенного компьютера>
+Traceback (most recent call last):
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 1348, in do_open
+    h.request(req.get_method(), req.selector, req.data, headers,
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1282, in request
+    self._send_request(method, url, body, headers, encode_chunked)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1328, in _send_request
+    self.endheaders(body, encode_chunked=encode_chunked)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1277, in endheaders
+    self._send_output(message_body, encode_chunked=encode_chunked)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1037, in _send_output
+    self.send(msg)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 975, in send
+    self.connect()
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1447, in connect
+    super().connect()
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 941, in connect
+    self.sock = self._create_connection(
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\socket.py", line 845, in create_connection
+    raise err
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\socket.py", line 833, in create_connection
+    sock.connect(sa)
+TimeoutError: [WinError 10060] Попытка установить соединение была безуспешной, т.к. от другого компьютера за требуемое время не получен нужный отклик, или было разорвано уже установленное соединение из-за неверного отклика уже подключенного компьютера
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\User\loyiha\record\bot.py", line 748, in main
+    response = await get_updates(offset)
+  File "C:\Users\User\loyiha\record\bot.py", line 282, in get_updates
+    return await asyncio.to_thread(run)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\asyncio\threads.py", line 25, in to_thread
+    return await loop.run_in_executor(None, func_call)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\concurrent\futures\thread.py", line 58, in run
+    result = self.fn(*self.args, **self.kwargs)
+  File "C:\Users\User\loyiha\record\bot.py", line 281, in run
+    return bot_api("getUpdates", data, timeout=35)
+  File "C:\Users\User\loyiha\record\bot.py", line 210, in bot_api
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 216, in urlopen
+    return opener.open(url, data, timeout)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 519, in open
+    response = self._open(req, data)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 536, in _open
+    result = self._call_chain(self.handle_open, protocol, protocol +
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 496, in _call_chain
+    result = func(*args)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 1391, in https_open
+    return self.do_open(http.client.HTTPSConnection, req,
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 1351, in do_open
+    raise URLError(err)
+urllib.error.URLError: <urlopen error [WinError 10060] Попытка установить соединение была безуспешной, т.к. от другого компьютера за требуемое время не получен нужный отклик, или было разорвано уже установленное соединение из-за неверного отклика уже подключенного компьютера>
+2026-07-14 22:05:16,890 - __main__ - ERROR - Bot API getUpdates network error: [Errno 11001] getaddrinfo failed
+2026-07-14 22:05:16,890 - __main__ - ERROR - Polling error, retry in 12s: <urlopen error [Errno 11001] getaddrinfo failed>
+Traceback (most recent call last):
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 1348, in do_open
+    h.request(req.get_method(), req.selector, req.data, headers,
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1282, in request
+    self._send_request(method, url, body, headers, encode_chunked)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1328, in _send_request
+    self.endheaders(body, encode_chunked=encode_chunked)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1277, in endheaders
+    self._send_output(message_body, encode_chunked=encode_chunked)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1037, in _send_output
+    self.send(msg)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 975, in send
+    self.connect()
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1447, in connect
+    super().connect()
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 941, in connect
+    self.sock = self._create_connection(
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\socket.py", line 824, in create_connection
+    for res in getaddrinfo(host, port, 0, SOCK_STREAM):
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\socket.py", line 955, in getaddrinfo
+    for res in _socket.getaddrinfo(host, port, family, type, proto, flags):
+socket.gaierror: [Errno 11001] getaddrinfo failed
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\User\loyiha\record\bot.py", line 748, in main
+    response = await get_updates(offset)
+  File "C:\Users\User\loyiha\record\bot.py", line 282, in get_updates
+    return await asyncio.to_thread(run)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\asyncio\threads.py", line 25, in to_thread
+    return await loop.run_in_executor(None, func_call)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\concurrent\futures\thread.py", line 58, in run
+    result = self.fn(*self.args, **self.kwargs)
+  File "C:\Users\User\loyiha\record\bot.py", line 281, in run
+    return bot_api("getUpdates", data, timeout=35)
+  File "C:\Users\User\loyiha\record\bot.py", line 210, in bot_api
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 216, in urlopen
+    return opener.open(url, data, timeout)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 519, in open
+    response = self._open(req, data)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 536, in _open
+    result = self._call_chain(self.handle_open, protocol, protocol +
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 496, in _call_chain
+    result = func(*args)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 1391, in https_open
+    return self.do_open(http.client.HTTPSConnection, req,
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 1351, in do_open
+    raise URLError(err)
+urllib.error.URLError: <urlopen error [Errno 11001] getaddrinfo failed>
+2026-07-14 22:05:28,960 - __main__ - ERROR - Bot API getUpdates network error: [Errno 11001] getaddrinfo failed
+2026-07-14 22:05:28,960 - __main__ - ERROR - Polling error, retry in 24s: <urlopen error [Errno 11001] getaddrinfo failed>
+Traceback (most recent call last):
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 1348, in do_open
+    h.request(req.get_method(), req.selector, req.data, headers,
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1282, in request
+    self._send_request(method, url, body, headers, encode_chunked)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1328, in _send_request
+    self.endheaders(body, encode_chunked=encode_chunked)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1277, in endheaders
+    self._send_output(message_body, encode_chunked=encode_chunked)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1037, in _send_output
+    self.send(msg)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 975, in send
+    self.connect()
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1447, in connect
+    super().connect()
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 941, in connect
+    self.sock = self._create_connection(
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\socket.py", line 824, in create_connection
+    for res in getaddrinfo(host, port, 0, SOCK_STREAM):
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\socket.py", line 955, in getaddrinfo
+    for res in _socket.getaddrinfo(host, port, family, type, proto, flags):
+socket.gaierror: [Errno 11001] getaddrinfo failed
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\User\loyiha\record\bot.py", line 748, in main
+    response = await get_updates(offset)
+  File "C:\Users\User\loyiha\record\bot.py", line 282, in get_updates
+    return await asyncio.to_thread(run)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\asyncio\threads.py", line 25, in to_thread
+    return await loop.run_in_executor(None, func_call)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\concurrent\futures\thread.py", line 58, in run
+    result = self.fn(*self.args, **self.kwargs)
+  File "C:\Users\User\loyiha\record\bot.py", line 281, in run
+    return bot_api("getUpdates", data, timeout=35)
+  File "C:\Users\User\loyiha\record\bot.py", line 210, in bot_api
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 216, in urlopen
+    return opener.open(url, data, timeout)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 519, in open
+    response = self._open(req, data)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 536, in _open
+    result = self._call_chain(self.handle_open, protocol, protocol +
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 496, in _call_chain
+    result = func(*args)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 1391, in https_open
+    return self.do_open(http.client.HTTPSConnection, req,
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 1351, in do_open
+    raise URLError(err)
+urllib.error.URLError: <urlopen error [Errno 11001] getaddrinfo failed>
+2026-07-14 22:05:53,041 - __main__ - ERROR - Bot API getUpdates network error: [Errno 11001] getaddrinfo failed
+2026-07-14 22:05:53,041 - __main__ - ERROR - Polling error, retry in 48s: <urlopen error [Errno 11001] getaddrinfo failed>
+Traceback (most recent call last):
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 1348, in do_open
+    h.request(req.get_method(), req.selector, req.data, headers,
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1282, in request
+    self._send_request(method, url, body, headers, encode_chunked)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1328, in _send_request
+    self.endheaders(body, encode_chunked=encode_chunked)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1277, in endheaders
+    self._send_output(message_body, encode_chunked=encode_chunked)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1037, in _send_output
+    self.send(msg)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 975, in send
+    self.connect()
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1447, in connect
+    super().connect()
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 941, in connect
+    self.sock = self._create_connection(
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\socket.py", line 824, in create_connection
+    for res in getaddrinfo(host, port, 0, SOCK_STREAM):
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\socket.py", line 955, in getaddrinfo
+    for res in _socket.getaddrinfo(host, port, family, type, proto, flags):
+socket.gaierror: [Errno 11001] getaddrinfo failed
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\User\loyiha\record\bot.py", line 748, in main
+    response = await get_updates(offset)
+  File "C:\Users\User\loyiha\record\bot.py", line 282, in get_updates
+    return await asyncio.to_thread(run)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\asyncio\threads.py", line 25, in to_thread
+    return await loop.run_in_executor(None, func_call)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\concurrent\futures\thread.py", line 58, in run
+    result = self.fn(*self.args, **self.kwargs)
+  File "C:\Users\User\loyiha\record\bot.py", line 281, in run
+    return bot_api("getUpdates", data, timeout=35)
+  File "C:\Users\User\loyiha\record\bot.py", line 210, in bot_api
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 216, in urlopen
+    return opener.open(url, data, timeout)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 519, in open
+    response = self._open(req, data)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 536, in _open
+    result = self._call_chain(self.handle_open, protocol, protocol +
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 496, in _call_chain
+    result = func(*args)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 1391, in https_open
+    return self.do_open(http.client.HTTPSConnection, req,
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 1351, in do_open
+    raise URLError(err)
+urllib.error.URLError: <urlopen error [Errno 11001] getaddrinfo failed>
+2026-07-14 22:09:35,013 - __main__ - ERROR - Bot API getUpdates network error: [WinError 10060] Попытка установить соединение была безуспешной, т.к. от другого компьютера за требуемое время не получен нужный отклик, или было разорвано уже установленное соединение из-за неверного отклика уже подключенного компьютера
+2026-07-14 22:09:35,210 - __main__ - ERROR - Polling error, retry in 3s: <urlopen error [WinError 10060] Попытка установить соединение была безуспешной, т.к. от другого компьютера за требуемое время не получен нужный отклик, или было разорвано уже установленное соединение из-за неверного отклика уже подключенного компьютера>
+Traceback (most recent call last):
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 1348, in do_open
+    h.request(req.get_method(), req.selector, req.data, headers,
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1282, in request
+    self._send_request(method, url, body, headers, encode_chunked)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1328, in _send_request
+    self.endheaders(body, encode_chunked=encode_chunked)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1277, in endheaders
+    self._send_output(message_body, encode_chunked=encode_chunked)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1037, in _send_output
+    self.send(msg)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 975, in send
+    self.connect()
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1447, in connect
+    super().connect()
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 941, in connect
+    self.sock = self._create_connection(
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\socket.py", line 845, in create_connection
+    raise err
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\socket.py", line 833, in create_connection
+    sock.connect(sa)
+TimeoutError: [WinError 10060] Попытка установить соединение была безуспешной, т.к. от другого компьютера за требуемое время не получен нужный отклик, или было разорвано уже установленное соединение из-за неверного отклика уже подключенного компьютера
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\User\loyiha\record\bot.py", line 748, in main
+    response = await get_updates(offset)
+  File "C:\Users\User\loyiha\record\bot.py", line 282, in get_updates
+    return await asyncio.to_thread(run)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\asyncio\threads.py", line 25, in to_thread
+    return await loop.run_in_executor(None, func_call)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\concurrent\futures\thread.py", line 58, in run
+    result = self.fn(*self.args, **self.kwargs)
+  File "C:\Users\User\loyiha\record\bot.py", line 281, in run
+    return bot_api("getUpdates", data, timeout=35)
+  File "C:\Users\User\loyiha\record\bot.py", line 210, in bot_api
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 216, in urlopen
+    return opener.open(url, data, timeout)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 519, in open
+    response = self._open(req, data)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 536, in _open
+    result = self._call_chain(self.handle_open, protocol, protocol +
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 496, in _call_chain
+    result = func(*args)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 1391, in https_open
+    return self.do_open(http.client.HTTPSConnection, req,
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 1351, in do_open
+    raise URLError(err)
+urllib.error.URLError: <urlopen error [WinError 10060] Попытка установить соединение была безуспешной, т.к. от другого компьютера за требуемое время не получен нужный отклик, или было разорвано уже установленное соединение из-за неверного отклика уже подключенного компьютера>
+2026-07-14 22:09:59,342 - __main__ - ERROR - Bot API getUpdates network error: [WinError 10060] Попытка установить соединение была безуспешной, т.к. от другого компьютера за требуемое время не получен нужный отклик, или было разорвано уже установленное соединение из-за неверного отклика уже подключенного компьютера
+2026-07-14 22:09:59,344 - __main__ - ERROR - Polling error, retry in 6s: <urlopen error [WinError 10060] Попытка установить соединение была безуспешной, т.к. от другого компьютера за требуемое время не получен нужный отклик, или было разорвано уже установленное соединение из-за неверного отклика уже подключенного компьютера>
+Traceback (most recent call last):
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 1348, in do_open
+    h.request(req.get_method(), req.selector, req.data, headers,
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1282, in request
+    self._send_request(method, url, body, headers, encode_chunked)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1328, in _send_request
+    self.endheaders(body, encode_chunked=encode_chunked)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1277, in endheaders
+    self._send_output(message_body, encode_chunked=encode_chunked)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1037, in _send_output
+    self.send(msg)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 975, in send
+    self.connect()
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1447, in connect
+    super().connect()
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 941, in connect
+    self.sock = self._create_connection(
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\socket.py", line 845, in create_connection
+    raise err
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\socket.py", line 833, in create_connection
+    sock.connect(sa)
+TimeoutError: [WinError 10060] Попытка установить соединение была безуспешной, т.к. от другого компьютера за требуемое время не получен нужный отклик, или было разорвано уже установленное соединение из-за неверного отклика уже подключенного компьютера
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\User\loyiha\record\bot.py", line 748, in main
+    response = await get_updates(offset)
+  File "C:\Users\User\loyiha\record\bot.py", line 282, in get_updates
+    return await asyncio.to_thread(run)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\asyncio\threads.py", line 25, in to_thread
+    return await loop.run_in_executor(None, func_call)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\concurrent\futures\thread.py", line 58, in run
+    result = self.fn(*self.args, **self.kwargs)
+  File "C:\Users\User\loyiha\record\bot.py", line 281, in run
+    return bot_api("getUpdates", data, timeout=35)
+  File "C:\Users\User\loyiha\record\bot.py", line 210, in bot_api
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 216, in urlopen
+    return opener.open(url, data, timeout)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 519, in open
+    response = self._open(req, data)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 536, in _open
+    result = self._call_chain(self.handle_open, protocol, protocol +
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 496, in _call_chain
+    result = func(*args)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 1391, in https_open
+    return self.do_open(http.client.HTTPSConnection, req,
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 1351, in do_open
+    raise URLError(err)
+urllib.error.URLError: <urlopen error [WinError 10060] Попытка установить соединение была безуспешной, т.к. от другого компьютера за требуемое время не получен нужный отклик, или было разорвано уже установленное соединение из-за неверного отклика уже подключенного компьютера>
+2026-07-14 22:10:05,556 - __main__ - ERROR - Bot API getUpdates network error: [Errno 11001] getaddrinfo failed
+2026-07-14 22:10:05,560 - __main__ - ERROR - Polling error, retry in 12s: <urlopen error [Errno 11001] getaddrinfo failed>
+Traceback (most recent call last):
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 1348, in do_open
+    h.request(req.get_method(), req.selector, req.data, headers,
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1282, in request
+    self._send_request(method, url, body, headers, encode_chunked)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1328, in _send_request
+    self.endheaders(body, encode_chunked=encode_chunked)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1277, in endheaders
+    self._send_output(message_body, encode_chunked=encode_chunked)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1037, in _send_output
+    self.send(msg)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 975, in send
+    self.connect()
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1447, in connect
+    super().connect()
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 941, in connect
+    self.sock = self._create_connection(
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\socket.py", line 824, in create_connection
+    for res in getaddrinfo(host, port, 0, SOCK_STREAM):
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\socket.py", line 955, in getaddrinfo
+    for res in _socket.getaddrinfo(host, port, family, type, proto, flags):
+socket.gaierror: [Errno 11001] getaddrinfo failed
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\User\loyiha\record\bot.py", line 748, in main
+    response = await get_updates(offset)
+  File "C:\Users\User\loyiha\record\bot.py", line 282, in get_updates
+    return await asyncio.to_thread(run)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\asyncio\threads.py", line 25, in to_thread
+    return await loop.run_in_executor(None, func_call)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\concurrent\futures\thread.py", line 58, in run
+    result = self.fn(*self.args, **self.kwargs)
+  File "C:\Users\User\loyiha\record\bot.py", line 281, in run
+    return bot_api("getUpdates", data, timeout=35)
+  File "C:\Users\User\loyiha\record\bot.py", line 210, in bot_api
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 216, in urlopen
+    return opener.open(url, data, timeout)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 519, in open
+    response = self._open(req, data)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 536, in _open
+    result = self._call_chain(self.handle_open, protocol, protocol +
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 496, in _call_chain
+    result = func(*args)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 1391, in https_open
+    return self.do_open(http.client.HTTPSConnection, req,
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 1351, in do_open
+    raise URLError(err)
+urllib.error.URLError: <urlopen error [Errno 11001] getaddrinfo failed>
+2026-07-14 22:10:38,922 - __main__ - ERROR - Bot API getUpdates network error: [WinError 10060] Попытка установить соединение была безуспешной, т.к. от другого компьютера за требуемое время не получен нужный отклик, или было разорвано уже установленное соединение из-за неверного отклика уже подключенного компьютера
+2026-07-14 22:10:38,926 - __main__ - ERROR - Polling error, retry in 24s: <urlopen error [WinError 10060] Попытка установить соединение была безуспешной, т.к. от другого компьютера за требуемое время не получен нужный отклик, или было разорвано уже установленное соединение из-за неверного отклика уже подключенного компьютера>
+Traceback (most recent call last):
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 1348, in do_open
+    h.request(req.get_method(), req.selector, req.data, headers,
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1282, in request
+    self._send_request(method, url, body, headers, encode_chunked)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1328, in _send_request
+    self.endheaders(body, encode_chunked=encode_chunked)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1277, in endheaders
+    self._send_output(message_body, encode_chunked=encode_chunked)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1037, in _send_output
+    self.send(msg)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 975, in send
+    self.connect()
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1447, in connect
+    super().connect()
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 941, in connect
+    self.sock = self._create_connection(
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\socket.py", line 845, in create_connection
+    raise err
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\socket.py", line 833, in create_connection
+    sock.connect(sa)
+TimeoutError: [WinError 10060] Попытка установить соединение была безуспешной, т.к. от другого компьютера за требуемое время не получен нужный отклик, или было разорвано уже установленное соединение из-за неверного отклика уже подключенного компьютера
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\User\loyiha\record\bot.py", line 748, in main
+    response = await get_updates(offset)
+  File "C:\Users\User\loyiha\record\bot.py", line 282, in get_updates
+    return await asyncio.to_thread(run)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\asyncio\threads.py", line 25, in to_thread
+    return await loop.run_in_executor(None, func_call)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\concurrent\futures\thread.py", line 58, in run
+    result = self.fn(*self.args, **self.kwargs)
+  File "C:\Users\User\loyiha\record\bot.py", line 281, in run
+    return bot_api("getUpdates", data, timeout=35)
+  File "C:\Users\User\loyiha\record\bot.py", line 210, in bot_api
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 216, in urlopen
+    return opener.open(url, data, timeout)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 519, in open
+    response = self._open(req, data)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 536, in _open
+    result = self._call_chain(self.handle_open, protocol, protocol +
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 496, in _call_chain
+    result = func(*args)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 1391, in https_open
+    return self.do_open(http.client.HTTPSConnection, req,
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 1351, in do_open
+    raise URLError(err)
+urllib.error.URLError: <urlopen error [WinError 10060] Попытка установить соединение была безуспешной, т.к. от другого компьютера за требуемое время не получен нужный отклик, или было разорвано уже установленное соединение из-за неверного отклика уже подключенного компьютера>
+2026-07-14 22:11:24,012 - __main__ - ERROR - Bot API getUpdates network error: [WinError 10060] Попытка установить соединение была безуспешной, т.к. от другого компьютера за требуемое время не получен нужный отклик, или было разорвано уже установленное соединение из-за неверного отклика уже подключенного компьютера
+2026-07-14 22:11:24,013 - __main__ - ERROR - Polling error, retry in 48s: <urlopen error [WinError 10060] Попытка установить соединение была безуспешной, т.к. от другого компьютера за требуемое время не получен нужный отклик, или было разорвано уже установленное соединение из-за неверного отклика уже подключенного компьютера>
+Traceback (most recent call last):
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 1348, in do_open
+    h.request(req.get_method(), req.selector, req.data, headers,
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1282, in request
+    self._send_request(method, url, body, headers, encode_chunked)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1328, in _send_request
+    self.endheaders(body, encode_chunked=encode_chunked)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1277, in endheaders
+    self._send_output(message_body, encode_chunked=encode_chunked)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1037, in _send_output
+    self.send(msg)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 975, in send
+    self.connect()
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1447, in connect
+    super().connect()
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 941, in connect
+    self.sock = self._create_connection(
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\socket.py", line 845, in create_connection
+    raise err
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\socket.py", line 833, in create_connection
+    sock.connect(sa)
+TimeoutError: [WinError 10060] Попытка установить соединение была безуспешной, т.к. от другого компьютера за требуемое время не получен нужный отклик, или было разорвано уже установленное соединение из-за неверного отклика уже подключенного компьютера
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\User\loyiha\record\bot.py", line 748, in main
+    response = await get_updates(offset)
+  File "C:\Users\User\loyiha\record\bot.py", line 282, in get_updates
+    return await asyncio.to_thread(run)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\asyncio\threads.py", line 25, in to_thread
+    return await loop.run_in_executor(None, func_call)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\concurrent\futures\thread.py", line 58, in run
+    result = self.fn(*self.args, **self.kwargs)
+  File "C:\Users\User\loyiha\record\bot.py", line 281, in run
+    return bot_api("getUpdates", data, timeout=35)
+  File "C:\Users\User\loyiha\record\bot.py", line 210, in bot_api
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 216, in urlopen
+    return opener.open(url, data, timeout)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 519, in open
+    response = self._open(req, data)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 536, in _open
+    result = self._call_chain(self.handle_open, protocol, protocol +
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 496, in _call_chain
+    result = func(*args)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 1391, in https_open
+    return self.do_open(http.client.HTTPSConnection, req,
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 1351, in do_open
+    raise URLError(err)
+urllib.error.URLError: <urlopen error [WinError 10060] Попытка установить соединение была безуспешной, т.к. от другого компьютера за требуемое время не получен нужный отклик, или было разорвано уже установленное соединение из-за неверного отклика уже подключенного компьютера>
+2026-07-14 22:15:18,952 - __main__ - ERROR - Bot API getUpdates network error: [WinError 10054] Удаленный хост принудительно разорвал существующее подключение
+2026-07-14 22:15:18,971 - __main__ - ERROR - Polling error, retry in 3s: <urlopen error [WinError 10054] Удаленный хост принудительно разорвал существующее подключение>
+Traceback (most recent call last):
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 1348, in do_open
+    h.request(req.get_method(), req.selector, req.data, headers,
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1282, in request
+    self._send_request(method, url, body, headers, encode_chunked)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1328, in _send_request
+    self.endheaders(body, encode_chunked=encode_chunked)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1277, in endheaders
+    self._send_output(message_body, encode_chunked=encode_chunked)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1037, in _send_output
+    self.send(msg)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 975, in send
+    self.connect()
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1454, in connect
+    self.sock = self._context.wrap_socket(self.sock,
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\ssl.py", line 513, in wrap_socket
+    return self.sslsocket_class._create(
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\ssl.py", line 1071, in _create
+    self.do_handshake()
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\ssl.py", line 1342, in do_handshake
+    self._sslobj.do_handshake()
+ConnectionResetError: [WinError 10054] Удаленный хост принудительно разорвал существующее подключение
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\User\loyiha\record\bot.py", line 748, in main
+    response = await get_updates(offset)
+  File "C:\Users\User\loyiha\record\bot.py", line 282, in get_updates
+    return await asyncio.to_thread(run)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\asyncio\threads.py", line 25, in to_thread
+    return await loop.run_in_executor(None, func_call)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\concurrent\futures\thread.py", line 58, in run
+    result = self.fn(*self.args, **self.kwargs)
+  File "C:\Users\User\loyiha\record\bot.py", line 281, in run
+    return bot_api("getUpdates", data, timeout=35)
+  File "C:\Users\User\loyiha\record\bot.py", line 210, in bot_api
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 216, in urlopen
+    return opener.open(url, data, timeout)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 519, in open
+    response = self._open(req, data)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 536, in _open
+    result = self._call_chain(self.handle_open, protocol, protocol +
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 496, in _call_chain
+    result = func(*args)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 1391, in https_open
+    return self.do_open(http.client.HTTPSConnection, req,
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 1351, in do_open
+    raise URLError(err)
+urllib.error.URLError: <urlopen error [WinError 10054] Удаленный хост принудительно разорвал существующее подключение>
+2026-07-14 22:28:08,109 - __main__ - ERROR - Polling error, retry in 3s: The read operation timed out
+Traceback (most recent call last):
+  File "C:\Users\User\loyiha\record\bot.py", line 748, in main
+    response = await get_updates(offset)
+  File "C:\Users\User\loyiha\record\bot.py", line 282, in get_updates
+    return await asyncio.to_thread(run)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\asyncio\threads.py", line 25, in to_thread
+    return await loop.run_in_executor(None, func_call)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\concurrent\futures\thread.py", line 58, in run
+    result = self.fn(*self.args, **self.kwargs)
+  File "C:\Users\User\loyiha\record\bot.py", line 281, in run
+    return bot_api("getUpdates", data, timeout=35)
+  File "C:\Users\User\loyiha\record\bot.py", line 210, in bot_api
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 216, in urlopen
+    return opener.open(url, data, timeout)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 519, in open
+    response = self._open(req, data)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 536, in _open
+    result = self._call_chain(self.handle_open, protocol, protocol +
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 496, in _call_chain
+    result = func(*args)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 1391, in https_open
+    return self.do_open(http.client.HTTPSConnection, req,
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 1352, in do_open
+    r = h.getresponse()
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1374, in getresponse
+    response.begin()
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 318, in begin
+    version, status, reason = self._read_status()
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 279, in _read_status
+    line = str(self.fp.readline(_MAXLINE + 1), "iso-8859-1")
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\socket.py", line 705, in readinto
+    return self._sock.recv_into(b)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\ssl.py", line 1274, in recv_into
+    return self.read(nbytes, buffer)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\ssl.py", line 1130, in read
+    return self._sslobj.read(len, buffer)
+TimeoutError: The read operation timed out
+2026-07-14 22:28:32,422 - __main__ - ERROR - Bot API getUpdates network error: [WinError 10060] Попытка установить соединение была безуспешной, т.к. от другого компьютера за требуемое время не получен нужный отклик, или было разорвано уже установленное соединение из-за неверного отклика уже подключенного компьютера
+2026-07-14 22:28:32,425 - __main__ - ERROR - Polling error, retry in 6s: <urlopen error [WinError 10060] Попытка установить соединение была безуспешной, т.к. от другого компьютера за требуемое время не получен нужный отклик, или было разорвано уже установленное соединение из-за неверного отклика уже подключенного компьютера>
+Traceback (most recent call last):
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 1348, in do_open
+    h.request(req.get_method(), req.selector, req.data, headers,
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1282, in request
+    self._send_request(method, url, body, headers, encode_chunked)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1328, in _send_request
+    self.endheaders(body, encode_chunked=encode_chunked)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1277, in endheaders
+    self._send_output(message_body, encode_chunked=encode_chunked)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1037, in _send_output
+    self.send(msg)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 975, in send
+    self.connect()
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1447, in connect
+    super().connect()
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 941, in connect
+    self.sock = self._create_connection(
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\socket.py", line 845, in create_connection
+    raise err
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\socket.py", line 833, in create_connection
+    sock.connect(sa)
+TimeoutError: [WinError 10060] Попытка установить соединение была безуспешной, т.к. от другого компьютера за требуемое время не получен нужный отклик, или было разорвано уже установленное соединение из-за неверного отклика уже подключенного компьютера
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\User\loyiha\record\bot.py", line 748, in main
+    response = await get_updates(offset)
+  File "C:\Users\User\loyiha\record\bot.py", line 282, in get_updates
+    return await asyncio.to_thread(run)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\asyncio\threads.py", line 25, in to_thread
+    return await loop.run_in_executor(None, func_call)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\concurrent\futures\thread.py", line 58, in run
+    result = self.fn(*self.args, **self.kwargs)
+  File "C:\Users\User\loyiha\record\bot.py", line 281, in run
+    return bot_api("getUpdates", data, timeout=35)
+  File "C:\Users\User\loyiha\record\bot.py", line 210, in bot_api
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 216, in urlopen
+    return opener.open(url, data, timeout)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 519, in open
+    response = self._open(req, data)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 536, in _open
+    result = self._call_chain(self.handle_open, protocol, protocol +
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 496, in _call_chain
+    result = func(*args)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 1391, in https_open
+    return self.do_open(http.client.HTTPSConnection, req,
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 1351, in do_open
+    raise URLError(err)
+urllib.error.URLError: <urlopen error [WinError 10060] Попытка установить соединение была безуспешной, т.к. от другого компьютера за требуемое время не получен нужный отклик, или было разорвано уже установленное соединение из-за неверного отклика уже подключенного компьютера>
+2026-07-14 22:28:41,164 - __main__ - ERROR - Bot API getUpdates network error: [WinError 10053] Программа на вашем хост-компьютере разорвала установленное подключение
+2026-07-14 22:28:41,233 - __main__ - ERROR - Polling error, retry in 12s: <urlopen error [WinError 10053] Программа на вашем хост-компьютере разорвала установленное подключение>
+Traceback (most recent call last):
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 1348, in do_open
+    h.request(req.get_method(), req.selector, req.data, headers,
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1282, in request
+    self._send_request(method, url, body, headers, encode_chunked)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1328, in _send_request
+    self.endheaders(body, encode_chunked=encode_chunked)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1277, in endheaders
+    self._send_output(message_body, encode_chunked=encode_chunked)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1037, in _send_output
+    self.send(msg)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 975, in send
+    self.connect()
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1447, in connect
+    super().connect()
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 941, in connect
+    self.sock = self._create_connection(
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\socket.py", line 845, in create_connection
+    raise err
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\socket.py", line 833, in create_connection
+    sock.connect(sa)
+ConnectionAbortedError: [WinError 10053] Программа на вашем хост-компьютере разорвала установленное подключение
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\User\loyiha\record\bot.py", line 748, in main
+    response = await get_updates(offset)
+  File "C:\Users\User\loyiha\record\bot.py", line 282, in get_updates
+    return await asyncio.to_thread(run)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\asyncio\threads.py", line 25, in to_thread
+    return await loop.run_in_executor(None, func_call)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\concurrent\futures\thread.py", line 58, in run
+    result = self.fn(*self.args, **self.kwargs)
+  File "C:\Users\User\loyiha\record\bot.py", line 281, in run
+    return bot_api("getUpdates", data, timeout=35)
+  File "C:\Users\User\loyiha\record\bot.py", line 210, in bot_api
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 216, in urlopen
+    return opener.open(url, data, timeout)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 519, in open
+    response = self._open(req, data)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 536, in _open
+    result = self._call_chain(self.handle_open, protocol, protocol +
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 496, in _call_chain
+    result = func(*args)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 1391, in https_open
+    return self.do_open(http.client.HTTPSConnection, req,
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 1351, in do_open
+    raise URLError(err)
+urllib.error.URLError: <urlopen error [WinError 10053] Программа на вашем хост-компьютере разорвала установленное подключение>
+2026-07-14 22:28:53,663 - __main__ - ERROR - Bot API getUpdates network error: [Errno 11001] getaddrinfo failed
+2026-07-14 22:28:53,663 - __main__ - ERROR - Polling error, retry in 24s: <urlopen error [Errno 11001] getaddrinfo failed>
+Traceback (most recent call last):
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 1348, in do_open
+    h.request(req.get_method(), req.selector, req.data, headers,
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1282, in request
+    self._send_request(method, url, body, headers, encode_chunked)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1328, in _send_request
+    self.endheaders(body, encode_chunked=encode_chunked)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1277, in endheaders
+    self._send_output(message_body, encode_chunked=encode_chunked)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1037, in _send_output
+    self.send(msg)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 975, in send
+    self.connect()
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1447, in connect
+    super().connect()
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 941, in connect
+    self.sock = self._create_connection(
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\socket.py", line 824, in create_connection
+    for res in getaddrinfo(host, port, 0, SOCK_STREAM):
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\socket.py", line 955, in getaddrinfo
+    for res in _socket.getaddrinfo(host, port, family, type, proto, flags):
+socket.gaierror: [Errno 11001] getaddrinfo failed
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\User\loyiha\record\bot.py", line 748, in main
+    response = await get_updates(offset)
+  File "C:\Users\User\loyiha\record\bot.py", line 282, in get_updates
+    return await asyncio.to_thread(run)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\asyncio\threads.py", line 25, in to_thread
+    return await loop.run_in_executor(None, func_call)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\concurrent\futures\thread.py", line 58, in run
+    result = self.fn(*self.args, **self.kwargs)
+  File "C:\Users\User\loyiha\record\bot.py", line 281, in run
+    return bot_api("getUpdates", data, timeout=35)
+  File "C:\Users\User\loyiha\record\bot.py", line 210, in bot_api
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 216, in urlopen
+    return opener.open(url, data, timeout)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 519, in open
+    response = self._open(req, data)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 536, in _open
+    result = self._call_chain(self.handle_open, protocol, protocol +
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 496, in _call_chain
+    result = func(*args)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 1391, in https_open
+    return self.do_open(http.client.HTTPSConnection, req,
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 1351, in do_open
+    raise URLError(err)
+urllib.error.URLError: <urlopen error [Errno 11001] getaddrinfo failed>
+2026-07-14 22:29:38,738 - __main__ - ERROR - Bot API getUpdates network error: [WinError 10060] Попытка установить соединение была безуспешной, т.к. от другого компьютера за требуемое время не получен нужный отклик, или было разорвано уже установленное соединение из-за неверного отклика уже подключенного компьютера
+2026-07-14 22:29:38,738 - __main__ - ERROR - Polling error, retry in 48s: <urlopen error [WinError 10060] Попытка установить соединение была безуспешной, т.к. от другого компьютера за требуемое время не получен нужный отклик, или было разорвано уже установленное соединение из-за неверного отклика уже подключенного компьютера>
+Traceback (most recent call last):
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 1348, in do_open
+    h.request(req.get_method(), req.selector, req.data, headers,
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1282, in request
+    self._send_request(method, url, body, headers, encode_chunked)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1328, in _send_request
+    self.endheaders(body, encode_chunked=encode_chunked)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1277, in endheaders
+    self._send_output(message_body, encode_chunked=encode_chunked)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1037, in _send_output
+    self.send(msg)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 975, in send
+    self.connect()
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1447, in connect
+    super().connect()
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 941, in connect
+    self.sock = self._create_connection(
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\socket.py", line 845, in create_connection
+    raise err
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\socket.py", line 833, in create_connection
+    sock.connect(sa)
+TimeoutError: [WinError 10060] Попытка установить соединение была безуспешной, т.к. от другого компьютера за требуемое время не получен нужный отклик, или было разорвано уже установленное соединение из-за неверного отклика уже подключенного компьютера
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\User\loyiha\record\bot.py", line 748, in main
+    response = await get_updates(offset)
+  File "C:\Users\User\loyiha\record\bot.py", line 282, in get_updates
+    return await asyncio.to_thread(run)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\asyncio\threads.py", line 25, in to_thread
+    return await loop.run_in_executor(None, func_call)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\concurrent\futures\thread.py", line 58, in run
+    result = self.fn(*self.args, **self.kwargs)
+  File "C:\Users\User\loyiha\record\bot.py", line 281, in run
+    return bot_api("getUpdates", data, timeout=35)
+  File "C:\Users\User\loyiha\record\bot.py", line 210, in bot_api
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 216, in urlopen
+    return opener.open(url, data, timeout)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 519, in open
+    response = self._open(req, data)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 536, in _open
+    result = self._call_chain(self.handle_open, protocol, protocol +
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 496, in _call_chain
+    result = func(*args)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 1391, in https_open
+    return self.do_open(http.client.HTTPSConnection, req,
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 1351, in do_open
+    raise URLError(err)
+urllib.error.URLError: <urlopen error [WinError 10060] Попытка установить соединение была безуспешной, т.к. от другого компьютера за требуемое время не получен нужный отклик, или было разорвано уже установленное соединение из-за неверного отклика уже подключенного компьютера>
+2026-07-14 22:30:26,799 - __main__ - ERROR - Bot API getUpdates network error: [Errno 11001] getaddrinfo failed
+2026-07-14 22:30:26,807 - __main__ - ERROR - Polling error, retry in 60s: <urlopen error [Errno 11001] getaddrinfo failed>
+Traceback (most recent call last):
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 1348, in do_open
+    h.request(req.get_method(), req.selector, req.data, headers,
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1282, in request
+    self._send_request(method, url, body, headers, encode_chunked)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1328, in _send_request
+    self.endheaders(body, encode_chunked=encode_chunked)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1277, in endheaders
+    self._send_output(message_body, encode_chunked=encode_chunked)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1037, in _send_output
+    self.send(msg)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 975, in send
+    self.connect()
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1447, in connect
+    super().connect()
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 941, in connect
+    self.sock = self._create_connection(
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\socket.py", line 824, in create_connection
+    for res in getaddrinfo(host, port, 0, SOCK_STREAM):
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\socket.py", line 955, in getaddrinfo
+    for res in _socket.getaddrinfo(host, port, family, type, proto, flags):
+socket.gaierror: [Errno 11001] getaddrinfo failed
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\User\loyiha\record\bot.py", line 748, in main
+    response = await get_updates(offset)
+  File "C:\Users\User\loyiha\record\bot.py", line 282, in get_updates
+    return await asyncio.to_thread(run)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\asyncio\threads.py", line 25, in to_thread
+    return await loop.run_in_executor(None, func_call)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\concurrent\futures\thread.py", line 58, in run
+    result = self.fn(*self.args, **self.kwargs)
+  File "C:\Users\User\loyiha\record\bot.py", line 281, in run
+    return bot_api("getUpdates", data, timeout=35)
+  File "C:\Users\User\loyiha\record\bot.py", line 210, in bot_api
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 216, in urlopen
+    return opener.open(url, data, timeout)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 519, in open
+    response = self._open(req, data)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 536, in _open
+    result = self._call_chain(self.handle_open, protocol, protocol +
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 496, in _call_chain
+    result = func(*args)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 1391, in https_open
+    return self.do_open(http.client.HTTPSConnection, req,
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 1351, in do_open
+    raise URLError(err)
+urllib.error.URLError: <urlopen error [Errno 11001] getaddrinfo failed>
+2026-07-14 22:31:26,932 - __main__ - ERROR - Bot API getUpdates network error: [Errno 11001] getaddrinfo failed
+2026-07-14 22:31:26,932 - __main__ - ERROR - Polling error, retry in 60s: <urlopen error [Errno 11001] getaddrinfo failed>
+Traceback (most recent call last):
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 1348, in do_open
+    h.request(req.get_method(), req.selector, req.data, headers,
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1282, in request
+    self._send_request(method, url, body, headers, encode_chunked)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1328, in _send_request
+    self.endheaders(body, encode_chunked=encode_chunked)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1277, in endheaders
+    self._send_output(message_body, encode_chunked=encode_chunked)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1037, in _send_output
+    self.send(msg)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 975, in send
+    self.connect()
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1447, in connect
+    super().connect()
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 941, in connect
+    self.sock = self._create_connection(
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\socket.py", line 824, in create_connection
+    for res in getaddrinfo(host, port, 0, SOCK_STREAM):
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\socket.py", line 955, in getaddrinfo
+    for res in _socket.getaddrinfo(host, port, family, type, proto, flags):
+socket.gaierror: [Errno 11001] getaddrinfo failed
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\User\loyiha\record\bot.py", line 748, in main
+    response = await get_updates(offset)
+  File "C:\Users\User\loyiha\record\bot.py", line 282, in get_updates
+    return await asyncio.to_thread(run)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\asyncio\threads.py", line 25, in to_thread
+    return await loop.run_in_executor(None, func_call)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\concurrent\futures\thread.py", line 58, in run
+    result = self.fn(*self.args, **self.kwargs)
+  File "C:\Users\User\loyiha\record\bot.py", line 281, in run
+    return bot_api("getUpdates", data, timeout=35)
+  File "C:\Users\User\loyiha\record\bot.py", line 210, in bot_api
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 216, in urlopen
+    return opener.open(url, data, timeout)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 519, in open
+    response = self._open(req, data)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 536, in _open
+    result = self._call_chain(self.handle_open, protocol, protocol +
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 496, in _call_chain
+    result = func(*args)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 1391, in https_open
+    return self.do_open(http.client.HTTPSConnection, req,
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 1351, in do_open
+    raise URLError(err)
+urllib.error.URLError: <urlopen error [Errno 11001] getaddrinfo failed>
+2026-07-14 22:32:27,007 - __main__ - ERROR - Bot API getUpdates network error: [Errno 11001] getaddrinfo failed
+2026-07-14 22:32:27,007 - __main__ - ERROR - Polling error, retry in 60s: <urlopen error [Errno 11001] getaddrinfo failed>
+Traceback (most recent call last):
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 1348, in do_open
+    h.request(req.get_method(), req.selector, req.data, headers,
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1282, in request
+    self._send_request(method, url, body, headers, encode_chunked)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1328, in _send_request
+    self.endheaders(body, encode_chunked=encode_chunked)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1277, in endheaders
+    self._send_output(message_body, encode_chunked=encode_chunked)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1037, in _send_output
+    self.send(msg)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 975, in send
+    self.connect()
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1447, in connect
+    super().connect()
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 941, in connect
+    self.sock = self._create_connection(
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\socket.py", line 824, in create_connection
+    for res in getaddrinfo(host, port, 0, SOCK_STREAM):
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\socket.py", line 955, in getaddrinfo
+    for res in _socket.getaddrinfo(host, port, family, type, proto, flags):
+socket.gaierror: [Errno 11001] getaddrinfo failed
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\User\loyiha\record\bot.py", line 748, in main
+    response = await get_updates(offset)
+  File "C:\Users\User\loyiha\record\bot.py", line 282, in get_updates
+    return await asyncio.to_thread(run)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\asyncio\threads.py", line 25, in to_thread
+    return await loop.run_in_executor(None, func_call)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\concurrent\futures\thread.py", line 58, in run
+    result = self.fn(*self.args, **self.kwargs)
+  File "C:\Users\User\loyiha\record\bot.py", line 281, in run
+    return bot_api("getUpdates", data, timeout=35)
+  File "C:\Users\User\loyiha\record\bot.py", line 210, in bot_api
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 216, in urlopen
+    return opener.open(url, data, timeout)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 519, in open
+    response = self._open(req, data)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 536, in _open
+    result = self._call_chain(self.handle_open, protocol, protocol +
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 496, in _call_chain
+    result = func(*args)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 1391, in https_open
+    return self.do_open(http.client.HTTPSConnection, req,
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 1351, in do_open
+    raise URLError(err)
+urllib.error.URLError: <urlopen error [Errno 11001] getaddrinfo failed>
+2026-07-14 22:33:27,076 - __main__ - ERROR - Bot API getUpdates network error: [Errno 11001] getaddrinfo failed
+2026-07-14 22:33:27,076 - __main__ - ERROR - Polling error, retry in 60s: <urlopen error [Errno 11001] getaddrinfo failed>
+Traceback (most recent call last):
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 1348, in do_open
+    h.request(req.get_method(), req.selector, req.data, headers,
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1282, in request
+    self._send_request(method, url, body, headers, encode_chunked)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1328, in _send_request
+    self.endheaders(body, encode_chunked=encode_chunked)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1277, in endheaders
+    self._send_output(message_body, encode_chunked=encode_chunked)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1037, in _send_output
+    self.send(msg)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 975, in send
+    self.connect()
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1447, in connect
+    super().connect()
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 941, in connect
+    self.sock = self._create_connection(
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\socket.py", line 824, in create_connection
+    for res in getaddrinfo(host, port, 0, SOCK_STREAM):
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\socket.py", line 955, in getaddrinfo
+    for res in _socket.getaddrinfo(host, port, family, type, proto, flags):
+socket.gaierror: [Errno 11001] getaddrinfo failed
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\User\loyiha\record\bot.py", line 748, in main
+    response = await get_updates(offset)
+  File "C:\Users\User\loyiha\record\bot.py", line 282, in get_updates
+    return await asyncio.to_thread(run)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\asyncio\threads.py", line 25, in to_thread
+    return await loop.run_in_executor(None, func_call)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\concurrent\futures\thread.py", line 58, in run
+    result = self.fn(*self.args, **self.kwargs)
+  File "C:\Users\User\loyiha\record\bot.py", line 281, in run
+    return bot_api("getUpdates", data, timeout=35)
+  File "C:\Users\User\loyiha\record\bot.py", line 210, in bot_api
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 216, in urlopen
+    return opener.open(url, data, timeout)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 519, in open
+    response = self._open(req, data)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 536, in _open
+    result = self._call_chain(self.handle_open, protocol, protocol +
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 496, in _call_chain
+    result = func(*args)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 1391, in https_open
+    return self.do_open(http.client.HTTPSConnection, req,
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 1351, in do_open
+    raise URLError(err)
+urllib.error.URLError: <urlopen error [Errno 11001] getaddrinfo failed>
+2026-07-14 22:34:27,140 - __main__ - ERROR - Bot API getUpdates network error: [Errno 11001] getaddrinfo failed
+2026-07-14 22:34:27,140 - __main__ - ERROR - Polling error, retry in 60s: <urlopen error [Errno 11001] getaddrinfo failed>
+Traceback (most recent call last):
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 1348, in do_open
+    h.request(req.get_method(), req.selector, req.data, headers,
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1282, in request
+    self._send_request(method, url, body, headers, encode_chunked)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1328, in _send_request
+    self.endheaders(body, encode_chunked=encode_chunked)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1277, in endheaders
+    self._send_output(message_body, encode_chunked=encode_chunked)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1037, in _send_output
+    self.send(msg)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 975, in send
+    self.connect()
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1447, in connect
+    super().connect()
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 941, in connect
+    self.sock = self._create_connection(
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\socket.py", line 824, in create_connection
+    for res in getaddrinfo(host, port, 0, SOCK_STREAM):
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\socket.py", line 955, in getaddrinfo
+    for res in _socket.getaddrinfo(host, port, family, type, proto, flags):
+socket.gaierror: [Errno 11001] getaddrinfo failed
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\User\loyiha\record\bot.py", line 748, in main
+    response = await get_updates(offset)
+  File "C:\Users\User\loyiha\record\bot.py", line 282, in get_updates
+    return await asyncio.to_thread(run)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\asyncio\threads.py", line 25, in to_thread
+    return await loop.run_in_executor(None, func_call)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\concurrent\futures\thread.py", line 58, in run
+    result = self.fn(*self.args, **self.kwargs)
+  File "C:\Users\User\loyiha\record\bot.py", line 281, in run
+    return bot_api("getUpdates", data, timeout=35)
+  File "C:\Users\User\loyiha\record\bot.py", line 210, in bot_api
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 216, in urlopen
+    return opener.open(url, data, timeout)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 519, in open
+    response = self._open(req, data)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 536, in _open
+    result = self._call_chain(self.handle_open, protocol, protocol +
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 496, in _call_chain
+    result = func(*args)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 1391, in https_open
+    return self.do_open(http.client.HTTPSConnection, req,
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 1351, in do_open
+    raise URLError(err)
+urllib.error.URLError: <urlopen error [Errno 11001] getaddrinfo failed>
+2026-07-14 22:35:27,219 - __main__ - ERROR - Bot API getUpdates network error: [Errno 11001] getaddrinfo failed
+2026-07-14 22:35:27,219 - __main__ - ERROR - Polling error, retry in 60s: <urlopen error [Errno 11001] getaddrinfo failed>
+Traceback (most recent call last):
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 1348, in do_open
+    h.request(req.get_method(), req.selector, req.data, headers,
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1282, in request
+    self._send_request(method, url, body, headers, encode_chunked)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1328, in _send_request
+    self.endheaders(body, encode_chunked=encode_chunked)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1277, in endheaders
+    self._send_output(message_body, encode_chunked=encode_chunked)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1037, in _send_output
+    self.send(msg)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 975, in send
+    self.connect()
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1447, in connect
+    super().connect()
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 941, in connect
+    self.sock = self._create_connection(
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\socket.py", line 824, in create_connection
+    for res in getaddrinfo(host, port, 0, SOCK_STREAM):
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\socket.py", line 955, in getaddrinfo
+    for res in _socket.getaddrinfo(host, port, family, type, proto, flags):
+socket.gaierror: [Errno 11001] getaddrinfo failed
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\User\loyiha\record\bot.py", line 748, in main
+    response = await get_updates(offset)
+  File "C:\Users\User\loyiha\record\bot.py", line 282, in get_updates
+    return await asyncio.to_thread(run)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\asyncio\threads.py", line 25, in to_thread
+    return await loop.run_in_executor(None, func_call)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\concurrent\futures\thread.py", line 58, in run
+    result = self.fn(*self.args, **self.kwargs)
+  File "C:\Users\User\loyiha\record\bot.py", line 281, in run
+    return bot_api("getUpdates", data, timeout=35)
+  File "C:\Users\User\loyiha\record\bot.py", line 210, in bot_api
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 216, in urlopen
+    return opener.open(url, data, timeout)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 519, in open
+    response = self._open(req, data)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 536, in _open
+    result = self._call_chain(self.handle_open, protocol, protocol +
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 496, in _call_chain
+    result = func(*args)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 1391, in https_open
+    return self.do_open(http.client.HTTPSConnection, req,
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 1351, in do_open
+    raise URLError(err)
+urllib.error.URLError: <urlopen error [Errno 11001] getaddrinfo failed>
+2026-07-14 22:36:27,260 - __main__ - ERROR - Bot API getUpdates network error: [Errno 11001] getaddrinfo failed
+2026-07-14 22:36:27,270 - __main__ - ERROR - Polling error, retry in 60s: <urlopen error [Errno 11001] getaddrinfo failed>
+Traceback (most recent call last):
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 1348, in do_open
+    h.request(req.get_method(), req.selector, req.data, headers,
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1282, in request
+    self._send_request(method, url, body, headers, encode_chunked)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1328, in _send_request
+    self.endheaders(body, encode_chunked=encode_chunked)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1277, in endheaders
+    self._send_output(message_body, encode_chunked=encode_chunked)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1037, in _send_output
+    self.send(msg)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 975, in send
+    self.connect()
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1447, in connect
+    super().connect()
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 941, in connect
+    self.sock = self._create_connection(
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\socket.py", line 824, in create_connection
+    for res in getaddrinfo(host, port, 0, SOCK_STREAM):
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\socket.py", line 955, in getaddrinfo
+    for res in _socket.getaddrinfo(host, port, family, type, proto, flags):
+socket.gaierror: [Errno 11001] getaddrinfo failed
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\User\loyiha\record\bot.py", line 748, in main
+    response = await get_updates(offset)
+  File "C:\Users\User\loyiha\record\bot.py", line 282, in get_updates
+    return await asyncio.to_thread(run)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\asyncio\threads.py", line 25, in to_thread
+    return await loop.run_in_executor(None, func_call)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\concurrent\futures\thread.py", line 58, in run
+    result = self.fn(*self.args, **self.kwargs)
+  File "C:\Users\User\loyiha\record\bot.py", line 281, in run
+    return bot_api("getUpdates", data, timeout=35)
+  File "C:\Users\User\loyiha\record\bot.py", line 210, in bot_api
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 216, in urlopen
+    return opener.open(url, data, timeout)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 519, in open
+    response = self._open(req, data)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 536, in _open
+    result = self._call_chain(self.handle_open, protocol, protocol +
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 496, in _call_chain
+    result = func(*args)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 1391, in https_open
+    return self.do_open(http.client.HTTPSConnection, req,
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 1351, in do_open
+    raise URLError(err)
+urllib.error.URLError: <urlopen error [Errno 11001] getaddrinfo failed>
+2026-07-14 22:37:27,312 - __main__ - ERROR - Bot API getUpdates network error: [Errno 11001] getaddrinfo failed
+2026-07-14 22:37:27,312 - __main__ - ERROR - Polling error, retry in 60s: <urlopen error [Errno 11001] getaddrinfo failed>
+Traceback (most recent call last):
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 1348, in do_open
+    h.request(req.get_method(), req.selector, req.data, headers,
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1282, in request
+    self._send_request(method, url, body, headers, encode_chunked)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1328, in _send_request
+    self.endheaders(body, encode_chunked=encode_chunked)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1277, in endheaders
+    self._send_output(message_body, encode_chunked=encode_chunked)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1037, in _send_output
+    self.send(msg)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 975, in send
+    self.connect()
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1447, in connect
+    super().connect()
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 941, in connect
+    self.sock = self._create_connection(
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\socket.py", line 824, in create_connection
+    for res in getaddrinfo(host, port, 0, SOCK_STREAM):
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\socket.py", line 955, in getaddrinfo
+    for res in _socket.getaddrinfo(host, port, family, type, proto, flags):
+socket.gaierror: [Errno 11001] getaddrinfo failed
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\User\loyiha\record\bot.py", line 748, in main
+    response = await get_updates(offset)
+  File "C:\Users\User\loyiha\record\bot.py", line 282, in get_updates
+    return await asyncio.to_thread(run)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\asyncio\threads.py", line 25, in to_thread
+    return await loop.run_in_executor(None, func_call)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\concurrent\futures\thread.py", line 58, in run
+    result = self.fn(*self.args, **self.kwargs)
+  File "C:\Users\User\loyiha\record\bot.py", line 281, in run
+    return bot_api("getUpdates", data, timeout=35)
+  File "C:\Users\User\loyiha\record\bot.py", line 210, in bot_api
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 216, in urlopen
+    return opener.open(url, data, timeout)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 519, in open
+    response = self._open(req, data)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 536, in _open
+    result = self._call_chain(self.handle_open, protocol, protocol +
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 496, in _call_chain
+    result = func(*args)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 1391, in https_open
+    return self.do_open(http.client.HTTPSConnection, req,
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 1351, in do_open
+    raise URLError(err)
+urllib.error.URLError: <urlopen error [Errno 11001] getaddrinfo failed>
+2026-07-14 22:38:27,374 - __main__ - ERROR - Bot API getUpdates network error: [Errno 11001] getaddrinfo failed
+2026-07-14 22:38:27,374 - __main__ - ERROR - Polling error, retry in 60s: <urlopen error [Errno 11001] getaddrinfo failed>
+Traceback (most recent call last):
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 1348, in do_open
+    h.request(req.get_method(), req.selector, req.data, headers,
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1282, in request
+    self._send_request(method, url, body, headers, encode_chunked)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1328, in _send_request
+    self.endheaders(body, encode_chunked=encode_chunked)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1277, in endheaders
+    self._send_output(message_body, encode_chunked=encode_chunked)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1037, in _send_output
+    self.send(msg)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 975, in send
+    self.connect()
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1447, in connect
+    super().connect()
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 941, in connect
+    self.sock = self._create_connection(
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\socket.py", line 824, in create_connection
+    for res in getaddrinfo(host, port, 0, SOCK_STREAM):
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\socket.py", line 955, in getaddrinfo
+    for res in _socket.getaddrinfo(host, port, family, type, proto, flags):
+socket.gaierror: [Errno 11001] getaddrinfo failed
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\User\loyiha\record\bot.py", line 748, in main
+    response = await get_updates(offset)
+  File "C:\Users\User\loyiha\record\bot.py", line 282, in get_updates
+    return await asyncio.to_thread(run)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\asyncio\threads.py", line 25, in to_thread
+    return await loop.run_in_executor(None, func_call)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\concurrent\futures\thread.py", line 58, in run
+    result = self.fn(*self.args, **self.kwargs)
+  File "C:\Users\User\loyiha\record\bot.py", line 281, in run
+    return bot_api("getUpdates", data, timeout=35)
+  File "C:\Users\User\loyiha\record\bot.py", line 210, in bot_api
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 216, in urlopen
+    return opener.open(url, data, timeout)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 519, in open
+    response = self._open(req, data)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 536, in _open
+    result = self._call_chain(self.handle_open, protocol, protocol +
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 496, in _call_chain
+    result = func(*args)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 1391, in https_open
+    return self.do_open(http.client.HTTPSConnection, req,
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 1351, in do_open
+    raise URLError(err)
+urllib.error.URLError: <urlopen error [Errno 11001] getaddrinfo failed>
+2026-07-14 22:39:27,425 - __main__ - ERROR - Bot API getUpdates network error: [Errno 11001] getaddrinfo failed
+2026-07-14 22:39:27,425 - __main__ - ERROR - Polling error, retry in 60s: <urlopen error [Errno 11001] getaddrinfo failed>
+Traceback (most recent call last):
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 1348, in do_open
+    h.request(req.get_method(), req.selector, req.data, headers,
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1282, in request
+    self._send_request(method, url, body, headers, encode_chunked)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1328, in _send_request
+    self.endheaders(body, encode_chunked=encode_chunked)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1277, in endheaders
+    self._send_output(message_body, encode_chunked=encode_chunked)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1037, in _send_output
+    self.send(msg)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 975, in send
+    self.connect()
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1447, in connect
+    super().connect()
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 941, in connect
+    self.sock = self._create_connection(
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\socket.py", line 824, in create_connection
+    for res in getaddrinfo(host, port, 0, SOCK_STREAM):
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\socket.py", line 955, in getaddrinfo
+    for res in _socket.getaddrinfo(host, port, family, type, proto, flags):
+socket.gaierror: [Errno 11001] getaddrinfo failed
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\User\loyiha\record\bot.py", line 748, in main
+    response = await get_updates(offset)
+  File "C:\Users\User\loyiha\record\bot.py", line 282, in get_updates
+    return await asyncio.to_thread(run)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\asyncio\threads.py", line 25, in to_thread
+    return await loop.run_in_executor(None, func_call)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\concurrent\futures\thread.py", line 58, in run
+    result = self.fn(*self.args, **self.kwargs)
+  File "C:\Users\User\loyiha\record\bot.py", line 281, in run
+    return bot_api("getUpdates", data, timeout=35)
+  File "C:\Users\User\loyiha\record\bot.py", line 210, in bot_api
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 216, in urlopen
+    return opener.open(url, data, timeout)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 519, in open
+    response = self._open(req, data)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 536, in _open
+    result = self._call_chain(self.handle_open, protocol, protocol +
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 496, in _call_chain
+    result = func(*args)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 1391, in https_open
+    return self.do_open(http.client.HTTPSConnection, req,
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 1351, in do_open
+    raise URLError(err)
+urllib.error.URLError: <urlopen error [Errno 11001] getaddrinfo failed>
+2026-07-15 06:11:08,092 - __main__ - ERROR - Bot API getUpdates HTTP 502: {"ok":false,"error_code":502,"description":"Bad Gateway"}
+2026-07-15 06:11:08,237 - __main__ - ERROR - Polling HTTP 502, retry in 3s
+2026-07-15 06:11:46,598 - __main__ - ERROR - Polling error, retry in 6s: The read operation timed out
+Traceback (most recent call last):
+  File "C:\Users\User\loyiha\record\bot.py", line 748, in main
+    try:
+  File "C:\Users\User\loyiha\record\bot.py", line 282, in get_updates
+    )
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\asyncio\threads.py", line 25, in to_thread
+    return await loop.run_in_executor(None, func_call)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\concurrent\futures\thread.py", line 58, in run
+    result = self.fn(*self.args, **self.kwargs)
+  File "C:\Users\User\loyiha\record\bot.py", line 281, in run
+    f'Content-Disposition: form-data; name="{name}"\r\n\r\n'.encode("ascii")
+  File "C:\Users\User\loyiha\record\bot.py", line 210, in bot_api
+    pass
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 216, in urlopen
+    return opener.open(url, data, timeout)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 519, in open
+    response = self._open(req, data)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 536, in _open
+    result = self._call_chain(self.handle_open, protocol, protocol +
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 496, in _call_chain
+    result = func(*args)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 1391, in https_open
+    return self.do_open(http.client.HTTPSConnection, req,
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\urllib\request.py", line 1352, in do_open
+    r = h.getresponse()
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1374, in getresponse
+    response.begin()
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 318, in begin
+    version, status, reason = self._read_status()
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 279, in _read_status
+    line = str(self.fp.readline(_MAXLINE + 1), "iso-8859-1")
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\socket.py", line 705, in readinto
+    return self._sock.recv_into(b)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\ssl.py", line 1274, in recv_into
+    return self.read(nbytes, buffer)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python310\lib\ssl.py", line 1130, in read
+    return self._sslobj.read(len, buffer)
+TimeoutError: The read operation timed out
