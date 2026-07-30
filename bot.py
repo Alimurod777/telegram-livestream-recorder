@@ -657,7 +657,7 @@ async def deliver_recording(session: RecordingSession) -> None:
             f"{session.channel_title}\n"
             f"Part {index}/{total} | {session.get_duration_str()} | {size_mb:.1f} MB"
         )
-        await send_recording_file(session.user_id, file_path, caption)
+        await send_recording_file(session.user_id, file_path, caption, is_video=getattr(session, 'is_video', False))
     stream_recorder.mark_delivered(session)
     await send_message(session.user_id, "Recording upload completed.")
 
