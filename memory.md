@@ -5,7 +5,39 @@
 
 ---
 
-## HOZIRGI HOLAT (2026-07-15)
+## HOZIRGI HOLAT (2026-10-25)
+
+### QA-009: Sifat — native resolution (2026-10-25)
+Eski kod `VideoParameters(1280x720)` bilan SFU dan past sifat so'rar va
+hamma kadrni 1280x720 canvas ga pad/scale qilardi. Endi:
+- `RecordStream` 1920x1080@60 so'raydi (ntgcalls pasaytirmaydi)
+- Encoder source native o'lchamida yozadi, bitrate ladder: 1080p→5000k, 720p→3000k
+- Audio stereo qoladi (`dynaudnorm` faqat `AUDIO_NORMALIZE=1` da)
+- `AudioParameters.bitrate` = PCM sample rate (48000 bo'lishi SHART, Opus bitrate EMAS)
+
+### QA-010: Rolling segments — "era" (2026-10-25)
+~1.5 GB (`SEGMENT_ROTATE_BYTES`) ga yetganda `MuxerManager.request_rotation()`
+yangi era ochadi; tugagan era background thread da partNNN.mp4 ga merge bo'ladi
+va yozish davomida yuklanadi. Frame yo'qotish yo'q: video writer FIFO queue +
+generation guard, audio swap tick chegarasida.
+
+### QA-011: Multi-account pool (2026-10-25)
+`livestream/accounts.py` — `accounts` jadvali (session_string, flood_until,
+active_recordings). FloodWait da avtomatik failover. Komandalar: /accounts,
+/addaccount, /delaccount.
+
+### QA-012: Media delivery — sendVideo/sendAudio (2026-10-25)
+Eski kod `send_recording_file(..., is_video=...)` ni noto'g'ri chaqirardi —
+har bir yuklash CRASH bo'lar edi. Endi: mp4+video→sendVideo (streaming,
+duration, WxH, thumbnail), ogg→sendVoice, audio→sendAudio, xato→sendDocument.
+
+### QA-013: Waiting mode (2026-10-25)
+Efir boshlanmagan bo'lsa inline tugma bilan so'raladi. Asosiy trigger —
+`video_chat_started` service message (event-driven, polling yo'q);
+`wait_probe_loop` faqat zaxira. Scheduled efir `video_chat_scheduled` dan
+keladi.
+
+---
 
 | Parametr | Qiymat |
 |----------|--------|

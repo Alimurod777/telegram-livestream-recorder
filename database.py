@@ -71,7 +71,105 @@ class Database:
                 )
                 """
             )
-            # session_string column is defined in CREATE TABLE above
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS accounts (
+                    account_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    label TEXT,
+                    session_string TEXT NOT NULL,
+                    flood_until TIMESTAMP,
+                    last_error TEXT,
+                    active_recordings INTEGER NOT NULL DEFAULT 0,
+                    last_used TIMESTAMP,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+                """
+            )
+            # Active recordings cannot survive a process restart.
+            cursor.execute("UPDATE accounts SET active_recordings = 0")
+
+    # ── Recording account pool (multi-account support) ───────────────────
+
+    def add_account(self, session_string: str, label: Optional[str] = None) -> Optional[int]:
+        try:
+            with self._get_connection() as conn:
+                cursor = conn.execute(
+                    "INSERT INTO accounts (label, session_string) VALUES (?, ?)",
+                    (label, session_string),
+                )
+                return int(cursor.lastrowid)
+        except Exception as exc:
+            print(f"Database error adding account: {exc}")
+            return None
+
+    def list_accounts(self) -> List[Dict[str, Any]]:
+        try:
+            with self._get_connection() as conn:
+                rows = conn.execute(
+                    """
+                    SELECT account_id, label, flood_until, last_error,
+                           active_recordings, last_used, created_at
+                    FROM accounts ORDER BY account_id
+                    """
+                ).fetchall()
+            return [dict(row) for row in rows]
+        except Exception as exc:
+            print(f"Database error listing accounts: {exc}")
+            return []
+
+    def get_account_session(self, account_id: int) -> Optional[str]:
+        try:
+            with self._get_connection() as conn:
+                row = conn.execute(
+                    "SELECT session_string FROM accounts WHERE account_id = ?",
+                    (account_id,),
+                ).fetchone()
+            return row["session_string"] if row else None
+        except Exception as exc:
+            print(f"Database error getting account: {exc}")
+            return None
+
+    def delete_account(self, account_id: int) -> bool:
+        try:
+            with self._get_connection() as conn:
+                conn.execute("DELETE FROM accounts WHERE account_id = ?", (account_id,))
+            return True
+        except Exception as exc:
+            print(f"Database error deleting account: {exc}")
+            return False
+
+    def mark_account_flood(self, account_id: int, until: datetime, error: Optional[str] = None) -> bool:
+        try:
+            with self._get_connection() as conn:
+                conn.execute(
+                    "UPDATE accounts SET flood_until = ?, last_error = ? WHERE account_id = ?",
+                    (until, error, account_id),
+                )
+            return True
+        except Exception:
+            return False
+
+    def set_account_active(self, account_id: int, count: int) -> bool:
+        try:
+            with self._get_connection() as conn:
+                conn.execute(
+                    "UPDATE accounts SET active_recordings = ?, last_used = ? WHERE account_id = ?",
+                    (count, datetime.now(), account_id),
+                )
+            return True
+        except Exception:
+            return False
+
+    def get_account_active(self, account_id: int) -> int:
+        try:
+            with self._get_connection() as conn:
+                row = conn.execute(
+                    "SELECT active_recordings FROM accounts WHERE account_id = ?",
+                    (account_id,),
+                ).fetchone()
+            return int(row["active_recordings"]) if row else 0
+        except Exception:
+            return 0
 
     def set_target(
         self,

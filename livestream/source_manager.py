@@ -1,6 +1,7 @@
 from typing import Dict, List, Optional
 from .metadata import VideoSource
 import logging
+import time
 
 logger = logging.getLogger(__name__)
 

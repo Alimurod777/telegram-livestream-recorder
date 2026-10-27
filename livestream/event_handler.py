@@ -1,13 +1,19 @@
 """Event handler for PyTgCalls updates.
 
 Processes StreamFrames (audio + video) and ChatUpdate events.
-Video frames are written directly in the callback — no separate writer
-thread needed since PyTgCalls delivers frames at the native rate.
+Video frames are enqueued to the MuxerManager writer thread (non-blocking),
+so the asyncio event loop never stalls on pipe writes.
+
+Also:
+- measures the real incoming FPS and restarts the encoder when it drifts
+  from the declared framerate (prevents fast/slow-motion output)
+- restarts the encoder automatically if its pipe broke
 """
 
 import asyncio
 import logging
 import time
+from collections import deque
 
 from pytgcalls.types import StreamFrames, ChatUpdate, Direction, Device
 
@@ -19,12 +25,19 @@ from config import VIDEO_SOURCE_STALE_SECONDS
 
 logger = logging.getLogger(__name__)
 
+_FPS_WINDOW = 90          # frames used for FPS estimation (~3 s at 30 fps)
+_FPS_MIN_SAMPLES = 30     # frames before we trust the estimate
+_FPS_DRIFT = 0.25         # relative drift that triggers an encoder restart
+_RESTART_COOLDOWN = 20.0  # seconds between encoder restarts
+
 
 class EventHandler:
     def __init__(self, recorder):
         self.recorder = recorder
         # Track current generation per session for write guards
         self._session_generation: dict = {}
+        self._fps_windows: dict = {}
+        self._last_restart: dict = {}
 
     async def handle_update(self, user_id: int, update) -> None:
         session = self.recorder.active_sessions.get(user_id)
@@ -40,18 +53,77 @@ class EventHandler:
                 payloads = [frame.frame for frame in update.frames if frame.frame]
                 session.audio_mixer.handle_audio_frames(payloads)
             elif update.device in (Device.CAMERA, Device.SCREEN):
-                self._handle_video_frames(session, update)
+                await self._handle_video_frames(session, update)
             return
 
         if isinstance(update, ChatUpdate):
-            if int(update.status.value) & int(ChatUpdate.Status.LEFT_CALL.value):
-                reason = getattr(update.status, "name", None) or str(update.status)
+            status = int(update.status.value)
+            final_status = int(
+                ChatUpdate.Status.CLOSED_VOICE_CHAT.value
+                | ChatUpdate.Status.DISCARDED_CALL.value
+            )
+            reason = getattr(update.status, "name", None) or str(update.status)
+            if status & final_status:
                 logger.info("Call ended for user %s: %s", user_id, reason)
                 asyncio.create_task(
                     self.recorder.stop_recording(user_id, reason=f"call ended: {reason}")
                 )
+            elif status & int(ChatUpdate.Status.LEFT_CALL.value):
+                # KICKED/LEFT_GROUP are not proof that the livestream ended.
+                # The watchdog will attempt to rejoin instead of destroying media.
+                logger.warning("Call membership lost for user %s: %s", user_id, reason)
 
-    def _handle_video_frames(self, session, update: StreamFrames) -> None:
+    def set_generation(self, session, generation: int) -> None:
+        """Update the write-guard generation after an external encoder
+        restart (e.g. segment rotation by StreamRecorder)."""
+        if generation is not None and generation >= 0:
+            self._session_generation[id(session)] = generation
+
+    # ── FPS estimation ────────────────────────────────────────────────────
+
+    def _measured_fps(self, session) -> float:
+        window = self._fps_windows.get(id(session))
+        if not window or len(window) < _FPS_MIN_SAMPLES:
+            return 0.0
+        span = window[-1] - window[0]
+        if span <= 0:
+            return 0.0
+        return (len(window) - 1) / span
+
+    def _track_fps(
+        self, session, now: float, capture_time_ms: int = 0
+    ) -> float:
+        window = self._fps_windows.setdefault(
+            id(session), deque(maxlen=_FPS_WINDOW)
+        )
+        timestamp = capture_time_ms / 1000.0 if capture_time_ms > 0 else now
+        if window and timestamp <= window[-1]:
+            window.clear()
+        window.append(timestamp)
+        return self._measured_fps(session)
+
+    def _needs_fps_restart(self, session, fps: float) -> bool:
+        if not fps:
+            return False
+        declared = session.muxer.encoder_fps
+        return abs(fps - declared) / max(declared, 1) > _FPS_DRIFT
+
+    def _restart_encoder(self, session, source, fps: float, why: str) -> int:
+        now = time.monotonic()
+        if now - self._last_restart.get(id(session), 0) < _RESTART_COOLDOWN:
+            return self._session_generation.get(id(session), -1)
+        self._last_restart[id(session)] = now
+        logger.info(
+            "Restarting video encoder (%s): measured_fps=%.1f declared_fps=%d",
+            why, fps, session.muxer.encoder_fps,
+        )
+        generation = session.muxer.start_video_encoder(source=source, fps=fps)
+        self._session_generation[id(session)] = generation
+        return generation
+
+    # ── Video pipeline ────────────────────────────────────────────────────
+
+    async def _handle_video_frames(self, session, update: StreamFrames) -> None:
         """Process incoming video frames with source detection, priority, and writing."""
         now = time.monotonic()
 
@@ -103,6 +175,17 @@ class EventHandler:
             or session.active_video_source.height != best_source.height
         )
 
+        frame = next(
+            (f for f in update.frames if f.ssrc == best_source.source_id),
+            None,
+        )
+        if not frame or not frame.frame:
+            return
+        if needs_switch:
+            self._fps_windows.pop(id(session), None)
+        capture_time = int(getattr(frame.info, "capture_time", 0) or 0)
+        fps = self._track_fps(session, now, capture_time)
+
         if needs_switch:
             old_type = (
                 session.active_video_source.source_type.name
@@ -119,8 +202,10 @@ class EventHandler:
             )
             session.active_video_source = best_source
 
-            # Start new encoder and get generation
-            generation = session.muxer.start_video_encoder(source=best_source)
+            # Start new encoder at native resolution with measured fps
+            generation = session.muxer.start_video_encoder(
+                source=best_source, fps=fps or None
+            )
             self._session_generation[id(session)] = generation
 
             # Transition state machine
@@ -143,15 +228,24 @@ class EventHandler:
                     )
                 except Exception:
                     pass
+        else:
+            # 8. Self-healing: restart encoder on pipe break or FPS drift
+            generation = self._session_generation.get(id(session))
+            if generation is None or session.muxer.video_writer_dead:
+                generation = self._restart_encoder(
+                    session, best_source, fps, "pipe broken"
+                )
+            elif self._needs_fps_restart(session, fps):
+                generation = self._restart_encoder(
+                    session, best_source, fps, "fps drift"
+                )
+            self._session_generation[id(session)] = generation
 
-        # 7. Write the best source's frame directly
-        generation = self._session_generation.get(id(session))
-        if generation is None:
+        if generation is None or generation < 0:
             return
 
-        frame = next(
-            (f for f in update.frames if f.ssrc == best_source.source_id),
-            None,
-        )
-        if frame and frame.frame:
-            session.muxer.write_video_frame(generation, frame.frame)
+        # 9. Enqueue the selected frame without blocking the event loop when
+        # the encoder is busy; bounded backpressure avoids silent frame loss.
+        session.video_frames += 1
+        if await session.muxer.write_video_frame_async(generation, frame.frame):
+            session.last_video_frame_at = time.monotonic()

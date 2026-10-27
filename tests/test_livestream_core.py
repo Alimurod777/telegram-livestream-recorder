@@ -1,11 +1,16 @@
 from __future__ import annotations
 
+import os
+import tempfile
 import unittest
+from types import SimpleNamespace
+from unittest.mock import Mock, patch
 
 from livestream.metadata import SourceType, VideoSource
 from livestream.priority_manager import PriorityManager
 from livestream.source_manager import SourceManager
 from livestream.state_machine import RecorderState, StateMachine
+from livestream.uploader import Uploader
 
 
 def source(
@@ -91,6 +96,30 @@ class StateMachineTests(unittest.TestCase):
         self.assertTrue(machine.is_recording)
         machine.transition(RecorderState.STOPPING)
         self.assertFalse(machine.is_recording)
+
+
+class FinalizationTests(unittest.TestCase):
+    def test_audio_only_output_is_m4a_and_accounted(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            output = os.path.join(directory, "recording.mp4")
+            with open(output, "wb") as handle:
+                handle.write(b"0" * 2048)
+            session = SimpleNamespace(
+                user_id=1,
+                output_path=output,
+                output_files=[],
+                output_sizes={},
+                is_video=False,
+                muxer=SimpleNamespace(finalize_media=Mock(return_value=output)),
+            )
+            with patch("livestream.uploader.valid_media", return_value=True):
+                Uploader(session).finalize()
+
+            audio = os.path.join(directory, "recording.m4a")
+            self.assertEqual(session.output_files, [audio])
+            self.assertEqual(session.output_sizes, {audio: 2048})
+            self.assertTrue(os.path.exists(audio))
+            self.assertFalse(os.path.exists(output))
 
 
 if __name__ == "__main__":
