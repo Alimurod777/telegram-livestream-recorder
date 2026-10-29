@@ -299,6 +299,37 @@ class DeliveryWindowTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual([frames for _, frames in self.sent if frames], [10, 10])
         self.assertEqual(len(self.sent), 4)
 
+    async def test_preview_then_capacity_then_stop_delivers_only_remaining_tail(self):
+        # Short real media stands in for the user's 1h / 1.5h / 3h timeline.
+        first = self.segment(0)
+        first_size = os.path.getsize(first)
+        self.session.part_actions[first] = "preview"
+        with patch.object(self.bot, "upload_part", new=AsyncMock(side_effect=self.upload)):
+            await self.bot.on_part_ready(self.session, first)
+            self.assertEqual(self.session.archive_files, [first])
+            self.assertEqual(self.session.pending_bytes(), first_size)
+
+            boundary = self.segment(1)
+            self.assertEqual(self.session.pending_bytes(), first_size + os.path.getsize(boundary))
+            self.session.part_actions[boundary] = "capacity"
+            await self.bot.on_part_ready(self.session, boundary)
+            self.assertEqual([frames for _, frames in self.sent if frames], [10, 20])
+            self.assertEqual(self.session.archive_files, [])
+            self.assertEqual(self.session.pending_bytes(), 0)
+            self.assertFalse(os.path.exists(first))
+            self.assertFalse(os.path.exists(boundary))
+
+            tail = self.segment(2)
+            self.assertEqual(self.session.pending_bytes(), os.path.getsize(tail))
+            self.session.finalizing = True
+            self.session.status = "completed"
+            await self.bot.deliver_recording(self.session)
+
+        # Preview = first interval; capacity = first + second; final = third only.
+        self.assertEqual([frames for _, frames in self.sent if frames], [10, 20, 10])
+        self.assertEqual(len(self.sent), 6)  # One video and one audio per delivery.
+        self.assertTrue(self.session.delivery_complete)
+
     async def test_audio_retry_does_not_resend_successful_video(self):
         first = self.segment(0)
         self.session.part_actions[first] = "capacity"

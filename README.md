@@ -8,6 +8,15 @@ A fully automated Telegram Bot that records live streams (Voice and Video chats)
 3. **Capture:** The bot uses `py-tgcalls` (ntgcalls WebRTC) to join the voice chat, intercepts the raw audio/video frames, and pipes them directly to **FFmpeg**.
 4. **Delivery:** The final `.mp4` file is sent to the user via Telegram Bot API (supports up to 2GB via local Bot API).
 
+## `/send`, avtomatik bo‘laklash va `/stop`
+
+- `/send` shu paytgacha yig‘ilgan yozuv nusxasini yuboradi. Yozish davom etadi; yuborilgan nusxa 1.97 GB hisobini yangidan boshlamaydi.
+- Joriy yozuv hajmi taxminan 1.97 GB ga yetganda, oldingi `/send` nusxasiga kirgan qism bilan yangi yozuv birlashtirilib yuboriladi. Shundan keyin yangi bo‘lak yig‘iladi.
+- `/stop` yoki efir tugashi oxirgi avtomatik bo‘lakdan keyingi yozuvni yuboradi. Avtomatik yuborilgan bo‘lak qayta qo‘shilmaydi. Avtomatik bo‘lak hali yuborilmagan bo‘lsa, butun yozuv bitta qilib yuboriladi.
+- Video yozuv bilan alohida audio ham yuboriladi.
+
+Masalan, 3 soatlik efirda 1-soatda `/send` berilsa, 0–1 soat nusxasi yuboriladi. Hajm 1.5-soatda taxminan 1.97 GB ga yetsa, 0–1.5 soat bitta qilib yuboriladi. Efir 3-soatda tugaganda faqat 1.5–3 soat yuboriladi.
+
 ## 🛠️ Installation & Setup (Boshqa kompyuterda ishga tushirish uchun)
 
 Follow these steps to deploy or run the project on a new computer after cloning:
