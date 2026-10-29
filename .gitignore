@@ -26,9 +26,9 @@ MANIFEST
 # Virtual Environment
 venv/
 .env
+sessions/
 
 # Secrets & Config
-config.py
 
 # Database & Storage
 recorder.db

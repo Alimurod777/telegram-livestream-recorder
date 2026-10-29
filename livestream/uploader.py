@@ -6,29 +6,23 @@ This module only finalizes the LAST segment and handles the oversized-file
 fallback split against the Bot API upload limit.
 """
 
-import glob
 import json
 import logging
 import os
-import subprocess
+import threading
 from datetime import datetime
 
-import config as _config
-from config import RECORDING_CHUNK_BYTES
 from .muxer import valid_media
+from .muxer import probe_video
+from ffmpeg_helper import get_ffmpeg_path
+import subprocess
 
 logger = logging.getLogger(__name__)
-
-# Split at the *effective* delivery limit: 2 GB via MTProto userbot upload,
-# not the 50 MB public Bot API cap (that applies only to the fallback path).
-UPLOAD_SPLIT_LIMIT = int(
-    getattr(_config, "EFFECTIVE_UPLOAD_LIMIT", 0) or RECORDING_CHUNK_BYTES
-)
-
 
 class Uploader:
     def __init__(self, session):
         self.session = session
+        self._manifest_lock = threading.Lock()
 
     def finalize(self):
         """Finalize the last media segment and register output files."""
@@ -38,86 +32,95 @@ class Uploader:
             logger.error(
                 "Failed to finalize media for user %s", self.session.user_id
             )
-            return
+            raise RuntimeError("No final media segment could be produced")
 
         if not valid_media(output_path):
             logger.error("Finalized media is not valid: %s", output_path)
-            return
+            raise RuntimeError("Final media segment is invalid")
 
         size = os.path.getsize(output_path)
         if size < 1024:
             logger.warning(
                 "Finalized media too small (%d bytes): %s", size, output_path
             )
-            return
+            raise RuntimeError("Final media segment contains no usable media")
 
         if not self.session.is_video and output_path.lower().endswith(".mp4"):
             audio_path = os.path.splitext(output_path)[0] + ".m4a"
             os.replace(output_path, audio_path)
             output_path = audio_path
 
-        if output_path not in self.session.output_files:
-            self.session.output_files.append(output_path)
-        self.session.output_sizes[output_path] = size
+        if output_path not in self.session.archive_files:
+            self.session.archive_files.append(output_path)
 
-        if size > UPLOAD_SPLIT_LIMIT:
-            logger.info(
-                "File exceeds chunk limit (%d > %d), splitting...",
-                size,
-                UPLOAD_SPLIT_LIMIT,
-            )
-            self._split_file(output_path)
+        # Delivery uses the recorder's size-aware splitter for every part.
 
-    def _split_file(self, file_path: str):
-        from ffmpeg_helper import get_ffmpeg_path
-
-        ffmpeg = get_ffmpeg_path()
-        base, ext = os.path.splitext(file_path)
-        chunk_pattern = f"{base}.part%03d{ext}"
-
-        creationflags = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
-        command = [
-            ffmpeg, "-y", "-i", file_path,
-            "-c", "copy", "-f", "segment",
-            "-segment_time", "3600",
-            "-segment_format", ext.lstrip(".") or "mp4",
-            "-reset_timestamps", "1",
-            chunk_pattern,
-        ]
-        try:
-            subprocess.run(
-                command,
-                check=True,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-                creationflags=creationflags,
-            )
-            parts = sorted(glob.glob(f"{base}.part*{ext}"))
-            if parts:
-                if file_path in self.session.output_files:
-                    self.session.output_files.remove(file_path)
-                self.session.output_files.extend(parts)
-                self.session.output_sizes.pop(file_path, None)
-                for part in parts:
-                    self.session.output_sizes[part] = os.path.getsize(part)
+    def prepare_delivery(self, sources: list[str], tag: str) -> list[str]:
+        """Create a video plus extracted audio, or one audio-only delivery."""
+        session = self.session
+        key = os.path.join(session.muxer.output_dir, session.muxer.stem + "." + tag)
+        previous = session.delivery_outputs.get(key)
+        if previous and all(p in session.uploaded_parts or valid_media(p) for p in previous):
+            return previous
+        session.delivery_sources[key] = list(sources)
+        existing = key + ".mp4" if valid_media(key + ".mp4") else key + ".m4a"
+        output = existing if valid_media(existing) else session.muxer.combine_parts(sources, key + ".mp4")
+        if not output or not valid_media(output):
+            raise RuntimeError("No complete recording is available for delivery")
+        outputs = [output]
+        if probe_video(output):
+            audio = key + ".audio.m4a"
+            if not valid_media(audio):
+                temporary = key + ".audio.tmp.m4a"
                 try:
-                    os.remove(file_path)
-                except OSError:
-                    pass
-        except subprocess.CalledProcessError as exc:
-            logger.error("Splitting failed: %s", exc)
+                    subprocess.run([get_ffmpeg_path(), "-y", "-v", "error", "-i", output,
+                                    "-map", "0:a:0", "-vn", "-c:a", "copy", "-movflags", "+faststart", temporary],
+                                   check=True, capture_output=True, timeout=1800)
+                    if not valid_media(temporary):
+                        raise RuntimeError("Extracted audio is invalid")
+                    os.replace(temporary, audio)
+                finally:
+                    if os.path.exists(temporary):
+                        os.remove(temporary)
+            outputs.append(audio)
+        session.delivery_outputs[key] = outputs
+        if not tag.startswith("preview"):
+            for path in outputs:
+                if path not in session.output_files:
+                    session.output_files.append(path)
+                session.output_sizes[path] = os.path.getsize(path) if os.path.exists(path) else session.output_sizes.get(path, 0)
+        self.write_manifest()
+        return outputs
+
+    def retire_sources(self, tag: str) -> None:
+        session = self.session
+        key = os.path.join(session.muxer.output_dir, session.muxer.stem + "." + tag)
+        outputs = session.delivery_outputs.get(key, [])
+        if not outputs or not all(path in session.uploaded_parts for path in outputs):
+            raise RuntimeError("Cannot retire recording before all media uploads succeed")
+        for path in session.delivery_sources.get(key, []):
+            if os.path.exists(path):
+                os.remove(path)
+            if path in session.archive_files:
+                session.archive_files.remove(path)
+        self.write_manifest()
 
     def write_manifest(self):
+        with self._manifest_lock:
+            self._write_manifest()
+
+    def _write_manifest(self):
         session = self.session
         end = session.stopped_at or datetime.now()
         duration = int((end - session.started_at).total_seconds())
         muxer = session.muxer
         data = {
-            "version": 3,
+            "version": 4,
             "user_id": session.user_id,
             "channel_id": session.channel_id,
             "channel_title": session.channel_title,
             "recording_id": getattr(session, "recording_id", -1),
+            "telegram_call_id": getattr(session, "telegram_call_id", None),
             "status": session.state_machine.current_state.name.lower(),
             "started_at": session.started_at.isoformat(),
             "stopped_at": end.isoformat() if session.stopped_at else None,
@@ -127,6 +130,13 @@ class Uploader:
                 {"path": path, "size": session.output_sizes.get(path)}
                 for path in session.output_files
             ],
+            "uploaded_parts": sorted(session.uploaded_parts),
+            "archive_files": session.archive_files,
+            "part_actions": session.part_actions,
+            "pending_actions": session.pending_actions,
+            "delivery_sources": session.delivery_sources,
+            "delivery_outputs": session.delivery_outputs,
+            "progress_message_id": session.progress_message_id,
             "stop_reason": session.stop_reason,
             "error": session.error,
             "active_source": (
@@ -152,7 +162,11 @@ class Uploader:
             },
         }
         try:
-            with open(session.manifest_path, "w", encoding="utf-8") as f:
+            temporary = session.manifest_path + ".tmp"
+            with open(temporary, "w", encoding="utf-8") as f:
                 json.dump(data, f, indent=2)
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(temporary, session.manifest_path)
         except Exception as exc:
             logger.warning("Could not write manifest: %s", exc)

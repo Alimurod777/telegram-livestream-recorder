@@ -4,11 +4,16 @@ import platform
 import shutil
 import subprocess
 from typing import List
+from functools import lru_cache
 
 logger = logging.getLogger(__name__)
 
 
+@lru_cache(maxsize=1)
 def get_ffmpeg_path() -> str:
+    system_path = shutil.which("ffmpeg")
+    if system_path:
+        return system_path
     try:
         import static_ffmpeg
 
@@ -48,8 +53,19 @@ def get_ffmpeg_path() -> str:
 
 def get_ffprobe_path() -> str:
     ffmpeg_path = get_ffmpeg_path()
-    ffprobe_path = ffmpeg_path.replace("ffmpeg", "ffprobe")
+    ffprobe_path = os.path.join(os.path.dirname(ffmpeg_path),
+                                "ffprobe.exe" if os.name == "nt" else "ffprobe")
     return ffprobe_path if os.path.exists(ffprobe_path) else (shutil.which("ffprobe") or ffprobe_path)
+
+
+def write_all(pipe, data: bytes) -> None:
+    """Unbuffered subprocess pipes may accept less than a complete frame."""
+    view = memoryview(data)
+    while view:
+        written = pipe.write(view)
+        if not written:
+            raise BrokenPipeError("Encoder pipe stopped accepting data")
+        view = view[written:]
 
 
 def get_file_size(file_path: str) -> int:

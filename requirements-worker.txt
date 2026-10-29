@@ -4,3 +4,5 @@ aiofiles>=24.1.0
 ffmpeg-python==0.2.0
 static-ffmpeg>=2.7
 numpy>=1.26.4
+python-dotenv>=1.0,<2
+pymongo>=4.9,<5

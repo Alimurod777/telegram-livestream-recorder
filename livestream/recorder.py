@@ -16,6 +16,8 @@ import os
 import re
 import threading
 import time
+import shutil
+import uuid
 from datetime import datetime
 from typing import Any, Awaitable, Callable, Dict, List, Optional, Tuple
 
@@ -29,7 +31,7 @@ from .metadata import VideoSource
 from .state_machine import StateMachine, RecorderState
 from .source_manager import SourceManager
 from .audio import AudioMixer
-from .muxer import MuxerManager, VIDEO_CRF
+from .muxer import MuxerManager, VIDEO_CRF, valid_media
 from .uploader import Uploader
 from .event_handler import EventHandler
 
@@ -43,8 +45,9 @@ from database import db
 
 logger = logging.getLogger(__name__)
 
-SEGMENT_ROTATE_BYTES = int(getattr(_config, "SEGMENT_ROTATE_BYTES", 1_500_000_000))
-SEGMENT_CHECK_INTERVAL = int(getattr(_config, "SEGMENT_CHECK_INTERVAL", 15))
+SEGMENT_ROTATE_BYTES = int(getattr(_config, "SEGMENT_ROTATE_BYTES", 1_970_000_000))
+SEGMENT_CHECK_INTERVAL = max(0.25, float(getattr(_config, "SEGMENT_CHECK_INTERVAL", 1)))
+MAX_RECORDING_SECONDS = min(14400, max(1, int(getattr(_config, "MAX_RECORDING_SECONDS", 14400))))
 WATCHDOG_INTERVAL = int(getattr(_config, "WATCHDOG_INTERVAL", 30))
 REJOIN_COOLDOWN = int(getattr(_config, "REJOIN_COOLDOWN", 60))
 FRAME_TIMEOUT_WARN = int(getattr(_config, "FRAME_TIMEOUT_WARN", 180))
@@ -66,6 +69,7 @@ class RecordingSession:
         self.channel_id = channel_id
         self.channel_title = channel_title
         self.recording_id = -1
+        self.telegram_call_id: Optional[int] = None
 
         user_dir = os.path.abspath(os.path.join(OUTPUT_DIR, str(user_id)))
         os.makedirs(user_dir, exist_ok=True)
@@ -76,13 +80,24 @@ class RecordingSession:
             value = re.sub(r"\s+", " ", value).strip(" ._-")
             return (value[:48] or fallback).strip()
 
-        stem = f"{_safe_name(channel_title)}_{stamp}"
+        stem = f"{_safe_name(channel_title)}_{stamp}_{uuid.uuid4().hex[:8]}"
         self.output_path = os.path.join(user_dir, f"{stem}.mp4")
         self.output_files: List[str] = []
+        self.archive_files: List[str] = []
+        self.part_actions: Dict[str, str] = {}
+        self.pending_actions: Dict[int, str] = {}
+        self.delivery_sources: Dict[str, List[str]] = {}
+        self.delivery_outputs: Dict[str, List[str]] = {}
+        self.capacity_pending = False
+        self.delivery_complete = False
+        self.progress_message_id: Optional[int] = None
+        self._duration_task: Optional[asyncio.Task] = None
+        self._progress_task: Optional[asyncio.Task] = None
         self.output_sizes: Dict[str, int] = {}
         self.uploaded_parts: set[str] = set()
         self.part_upload_tasks: Dict[str, asyncio.Task] = {}
         self.upload_lock = asyncio.Lock()
+        self.media_lock = asyncio.Lock()
         self.manifest_path = os.path.join(user_dir, f"{stem}.recording.json")
         self.started_at = datetime.now()
         self.stopped_at: Optional[datetime] = None
@@ -126,15 +141,33 @@ class RecordingSession:
             return f"{minutes}m {seconds}s"
         return f"{seconds}s"
 
+    def pending_bytes(self) -> int:
+        boundaries = [index for index, action in self.pending_actions.items() if action == "capacity"]
+        boundaries += [int(re.search(r"\.part(\d+)\.", p)[1]) for p, action in self.part_actions.items()
+                       if action == "capacity" and re.search(r"\.part(\d+)\.", p)]
+        committed_boundary = max(boundaries, default=-1)
+        paths = {p for p in self.archive_files if not re.search(r"\.part(\d+)\.", p)
+                 or int(re.search(r"\.part(\d+)\.", p)[1]) > committed_boundary}
+        for era in self.muxer.eras:
+            if era.index > committed_boundary:
+                paths.update(era.audio_parts + era.video_parts)
+        total = 0
+        for path in paths:
+            try:
+                total += os.path.getsize(path)
+            except FileNotFoundError:
+                pass  # Finalization or upload may have removed the file.
+        return total
+
     def stats_line(self) -> str:
         muxer = self.muxer
         source = self.active_video_source
         resolution = f"{source.width}x{source.height}" if source else "audio-only"
-        duration = max(1, int((datetime.now() - self.started_at).total_seconds()))
-        total_bytes = sum(self.output_sizes.values())
+        duration = max(1, int(((self.stopped_at or datetime.now()) - self.started_at).total_seconds()))
+        total_bytes = sum(self.output_sizes.values()) + self.pending_bytes()
         bitrate_kbps = total_bytes * 8 // duration // 1000
         return (
-            f"chat={self.channel_id} stream={self.recording_id} "
+            f"chat={self.channel_id} stream={self.telegram_call_id or self.recording_id} recording={self.recording_id} "
             f"duration={self.get_duration_str()} resolution={resolution} "
             f"video_codec=h264 audio_codec=aac fps={muxer.encoder_fps:.3g} "
             f"crf={VIDEO_CRF} bitrate={bitrate_kbps}kbps bytes={total_bytes} "
@@ -156,6 +189,7 @@ class StreamRecorder:
         # PyTgCalls cache keyed by id(client): a shared pool account client
         # is reused across users instead of double-wrapping.
         self.call_clients: Dict[int, PyTgCalls] = {}
+        self._call_locks: Dict[int, asyncio.Lock] = {}
         self.backend_name = "py-tgcalls/ntgcalls (modular)"
         self.captures_media = True
         self._notify_callback: Optional[NotifyCallback] = None
@@ -205,12 +239,15 @@ class StreamRecorder:
                 os.remove(session.manifest_path)
             user_dir = os.path.dirname(session.output_path)
             stem = session.muxer.stem
-            keep = set(session.output_files)
+            for path in getattr(session, "archive_files", []):
+                if os.path.isfile(path):
+                    os.remove(path)
             for temp_f in glob.glob(os.path.join(user_dir, f"{stem}*")):
-                if temp_f in keep or temp_f.endswith(".mp4"):
-                    continue
                 try:
-                    os.remove(temp_f)
+                    if os.path.isdir(temp_f):
+                        shutil.rmtree(temp_f)
+                    else:
+                        os.remove(temp_f)
                 except OSError:
                     pass
         except Exception as exc:
@@ -245,7 +282,13 @@ class StreamRecorder:
 
         ffmpeg = get_ffmpeg_path()
         base, ext = os.path.splitext(file_path)
-        chunk_pattern = f"{base}.part%03d{ext}"
+        split_dir = base + f".split-{max_bytes}"
+        os.makedirs(split_dir, exist_ok=True)
+        chunk_pattern = os.path.join(split_dir, f"part%05d{ext}")
+        pattern = os.path.join(split_dir, f"part*{ext}")
+        existing = sorted(glob.glob(pattern))
+        if os.path.exists(os.path.join(split_dir, ".complete")) and existing:
+            return existing
 
         file_size = os.path.getsize(file_path)
         try:
@@ -263,38 +306,35 @@ class StreamRecorder:
                 creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
             )
             duration = float(probe_result.stdout.strip())
-            num_chunks = max(2, int(file_size / max_bytes) + 1)
-            segment_time = int(duration / num_chunks) + 1
+            segment_time = duration * max_bytes / file_size * 0.8
+            if duration <= 0:
+                raise ValueError("Invalid media duration")
         except Exception:
-            segment_time = 3600
+            raise RuntimeError(f"Cannot determine split duration for {file_path}")
 
         creationflags = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
-        command = [
-            ffmpeg, "-y", "-i", file_path,
-            "-c", "copy", "-f", "segment",
-            "-segment_time", str(segment_time),
-            "-segment_format", ext.lstrip(".") or "mp4",
-            "-reset_timestamps", "1",
-            chunk_pattern,
-        ]
-        try:
-            subprocess.run(
-                command,
-                check=True,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-                creationflags=creationflags,
-            )
-            parts = sorted(glob.glob(f"{base}.part*{ext}"))
-            if parts and delete_original:
-                try:
+        for _ in range(8):
+            for stale in glob.glob(pattern):
+                os.remove(stale)
+            command = [
+                ffmpeg, "-y", "-v", "error", "-i", file_path,
+                "-map", "0", "-c", "copy", "-f", "segment",
+                "-segment_time", str(max(segment_time, 0.01)),
+                "-segment_format", "mp4" if ext == ".m4a" else ext.lstrip("."),
+                "-reset_timestamps", "1", chunk_pattern,
+            ]
+            subprocess.run(command, check=True, stdout=subprocess.DEVNULL,
+                           stderr=subprocess.PIPE, timeout=1800, creationflags=creationflags)
+            parts = sorted(glob.glob(pattern))
+            largest = max((os.path.getsize(p) for p in parts), default=0)
+            if parts and 0 < largest <= max_bytes:
+                with open(os.path.join(split_dir, ".complete"), "w") as handle:
+                    handle.write("complete")
+                if delete_original:
                     os.remove(file_path)
-                except OSError:
-                    pass
-            return parts if parts else [file_path]
-        except subprocess.CalledProcessError as e:
-            logger.error("Splitting failed: %s", e)
-            return [file_path]
+                return parts
+            segment_time *= min(0.5, max_bytes / max(largest, 1) * 0.8)
+        raise RuntimeError("Cannot split below the upload limit without re-encoding keyframes")
 
     # ── Start recording ──────────────────────────────────────────────────
 
@@ -324,16 +364,28 @@ class StreamRecorder:
         client: Client,
         is_video: bool = True,
         account_id: Optional[int] = None,
+        telegram_call_id: Optional[int] = None,
     ) -> RecordingSession:
         self._loop = asyncio.get_running_loop()
         async with self._state_lock:
             current = self.active_sessions.get(user_id)
             if current:
                 return current
+            identity = getattr(getattr(client, "me", None), "id", None)
+            def same_account(other) -> bool:
+                return other is client or (identity is not None and identity == getattr(getattr(other, "me", None), "id", None))
+            if any(same_account(s.client) and s.channel_id == int(channel_id)
+                   for s in self.active_sessions.values()):
+                raise RuntimeError("This account is already recording this chat")
+            if sum(same_account(s.client) for s in self.active_sessions.values()) >= max(
+                1, int(getattr(_config, "MAX_RECORDINGS_PER_ACCOUNT", 1))
+            ):
+                raise RuntimeError("Account recording capacity reached; use another account")
 
             session = RecordingSession(user_id, int(channel_id), channel_title)
             session.client = client
             session.account_id = account_id
+            session.telegram_call_id = telegram_call_id
             session.recording_id = await asyncio.to_thread(
                 db.start_recording, user_id, int(channel_id), channel_title, is_video
             )
@@ -374,11 +426,15 @@ class StreamRecorder:
             session._watchdog_task = asyncio.create_task(
                 self._watchdog_loop(session, is_video)
             )
+            session._duration_task = asyncio.create_task(self._duration_limit_loop(session))
             return session
-        except Exception as exc:
-            logger.exception("Could not start recording")
+        except (Exception, asyncio.CancelledError) as exc:
+            if isinstance(exc, asyncio.CancelledError):
+                logger.info("Recording start cancelled: user=%s chat=%s", user_id, channel_id)
+            else:
+                logger.exception("Could not start recording")
             session.state_machine.transition(RecorderState.ERROR)
-            session.error = str(exc)
+            session.error = str(exc) or "Recording start cancelled"
             session.status = "failed"
             session.stopped_at = datetime.now()
             session.stop_event.set()
@@ -386,8 +442,10 @@ class StreamRecorder:
             if call_client:
                 await self._leave_call(call_client, session.channel_id)
 
-            session.muxer.close_all()
+            await asyncio.to_thread(session.audio_mixer.join_writer)
+            await asyncio.to_thread(session.muxer.close_all)
             session.muxer.close_logs()
+            self._event_handler.forget(session)
             async with self._state_lock:
                 self.active_sessions.pop(user_id, None)
 
@@ -395,19 +453,20 @@ class StreamRecorder:
                 db.finish_recording,
                 recording_id=session.recording_id,
                 status="failed",
-                error_message=str(exc),
+                error_message=session.error,
             )
             session.uploader.write_manifest()
             raise
 
     def _on_part_ready_sync(self, session: RecordingSession, path: str) -> None:
         """Called from the muxer finalizer thread when a part mp4 is ready."""
-        session.output_files.append(path)
-        try:
-            session.output_sizes[path] = os.path.getsize(path)
-        except OSError:
-            pass
-        if self._part_callback and self._loop and not session.finalizing:
+        if path not in session.archive_files:
+            session.archive_files.append(path)
+        match = re.search(r"\.part(\d+)\.", path)
+        action = session.pending_actions.pop(int(match[1]), None) if match else None
+        if action:
+            session.part_actions[path] = action
+        if action and self._part_callback and self._loop and not session.finalizing:
             asyncio.run_coroutine_threadsafe(
                 self._track_part_upload(session, path), self._loop
             )
@@ -425,6 +484,12 @@ class StreamRecorder:
             session.part_upload_tasks.pop(path, None)
 
     async def _get_call_client(
+        self, user_id: int, client: Client
+    ) -> PyTgCalls:
+        async with self._call_locks.setdefault(id(client), asyncio.Lock()):
+            return await self._create_call_client(user_id, client)
+
+    async def _create_call_client(
         self, user_id: int, client: Client
     ) -> PyTgCalls:
         key = id(client)
@@ -456,38 +521,77 @@ class StreamRecorder:
     # ── Rolling segment rotation ─────────────────────────────────────────
 
     async def _rotation_loop(self, session: RecordingSession) -> None:
+        previous_bytes, previous_time = 0, time.monotonic()
         while not session.stop_event.is_set():
             await asyncio.sleep(SEGMENT_CHECK_INTERVAL)
             if session.finalizing:
                 return
             try:
-                if (
-                    SEGMENT_ROTATE_BYTES
-                    and session.muxer.current_era_bytes() >= SEGMENT_ROTATE_BYTES
-                ):
-                    await self._rotate_session(session)
+                free = await asyncio.to_thread(shutil.disk_usage, session.muxer.output_dir)
+                minimum = int(getattr(_config, "MIN_FREE_DISK_BYTES", 2_000_000_000))
+                if free.free < minimum:
+                    await self._notify(session.user_id, "Recording stopped: insufficient disk space. Completed segments are retained for delivery.")
+                    asyncio.create_task(self.stop_recording(session.user_id, reason="disk space limit"))
+                    return
+                size, now = session.pending_bytes(), time.monotonic()
+                rate = max(0, size - previous_bytes) / max(now - previous_time, 0.01)
+                previous_bytes, previous_time = size, now
+                limit = int(getattr(_config, "EFFECTIVE_UPLOAD_LIMIT", 1_990_000_000))
+                reserve = max(8_000_000, rate * SEGMENT_CHECK_INTERVAL * 3, size * 0.01)
+                threshold = min(SEGMENT_ROTATE_BYTES, max(1, limit - reserve))
+                if size >= threshold:
+                    await self._rotate_session(session, action="capacity")
             except Exception:
                 logger.exception(
                     "Rotation check failed for user %s", session.user_id
                 )
 
-    async def _rotate_session(self, session: RecordingSession) -> None:
+    async def send_current_part(self, user_id: int) -> bool:
+        """Deliver captured media through the rolling uploader and keep capturing."""
+        session = self.get_session(user_id)
+        if session is None:
+            return False
+        return await self._rotate_session(session, notify=False, minimum_bytes=1024, action="preview")
+
+    async def _rotate_session(
+        self, session: RecordingSession, notify: bool = True, minimum_bytes: int = 0,
+        action: Optional[str] = None,
+    ) -> bool:
         logger.info(
             "Rotating segment for user %s (era reached %.2f GB)",
             session.user_id,
             session.muxer.current_era_bytes() / 1e9,
         )
-        session.muxer.request_rotation()
-        source = session.active_video_source
-        if source is not None:
-            generation = session.muxer.start_video_encoder(source=source)
-            self._event_handler.set_generation(session, generation)
-        session.audio_mixer.request_rotate()
-        await self._notify(
-            session.user_id,
-            f"📦 Segment reached ~{SEGMENT_ROTATE_BYTES // 1_000_000} MB — "
-            "it will be uploaded while recording continues.",
-        )
+        async with session.media_lock:
+            if session.finalizing or session.stop_event.is_set():
+                return False
+            if session.muxer.current_era_bytes() < minimum_bytes:
+                return False
+            if action:
+                session.pending_actions[session.muxer.eras[-1].index] = action
+                if action == "capacity":
+                    session.capacity_pending = True
+                session.uploader.write_manifest()
+            session.muxer.request_rotation()
+            source = session.active_video_source
+            if source is not None:
+                generation = session.muxer.start_video_encoder(
+                    source=source, fps=session.muxer.encoder_fps
+                )
+                self._event_handler.set_generation(session, generation)
+            session.audio_mixer.request_rotate()
+        if notify:
+            await self._notify(
+                session.user_id,
+                f"📦 Segment reached ~{session.pending_bytes() // 1_000_000} MB — "
+                "it will be uploaded while recording continues.",
+            )
+        return True
+
+    async def _duration_limit_loop(self, session: RecordingSession) -> None:
+        await asyncio.sleep(MAX_RECORDING_SECONDS)
+        if self.get_session(session.user_id) is session and not session.finalizing:
+            asyncio.create_task(self.stop_recording(session.user_id, reason="4 hour recording limit"))
 
     # ── Watchdog ─────────────────────────────────────────────────────────
 
@@ -565,12 +669,18 @@ class StreamRecorder:
                     key in str(exc).lower()
                     for key in ("flood", "too many requests")
                 )
-                if not flood_like or not self._recovery_callback:
+                auth_lost = any(key in str(exc).lower() for key in (
+                    "auth_key_unregistered", "session_revoked", "session_expired", "user_deactivated"
+                ))
+                if not (flood_like or auth_lost) or not self._recovery_callback:
                     break
                 replacement = await self._recovery_callback(session, exc)
                 if not replacement:
                     break
                 client, account_id = replacement
+                old_call_client = session.call_client
+                if old_call_client:
+                    await self._leave_call(old_call_client, session.channel_id)
                 session.client = client
                 session.account_id = account_id
                 session.call_client = await self._get_call_client(
@@ -609,7 +719,7 @@ class StreamRecorder:
         session.stop_reason = reason
         session.uploader.write_manifest()
 
-        for task in (session._rotation_task, session._watchdog_task):
+        for task in (session._rotation_task, session._watchdog_task, session._duration_task):
             if task and not task.done():
                 task.cancel()
 
@@ -619,25 +729,28 @@ class StreamRecorder:
 
         session.stop_event.set()
 
-        # Wait for audio writer without blocking other recordings/uploads.
-        await asyncio.to_thread(session.audio_mixer.join_writer)
-
         session.stopped_at = datetime.now()
 
         try:
+            await asyncio.to_thread(session.audio_mixer.join_writer)
             await asyncio.to_thread(session.uploader.finalize)
-            if not session.output_files:
+            if not session.archive_files and not session.output_files:
                 raise RuntimeError("No decodable audio or video frames were received")
             session.state_machine.transition(RecorderState.STOPPED)
             session.status = "completed"
 
         except Exception as exc:
             logger.exception("Finalization failed for user %s", session.user_id)
+            try:
+                await asyncio.to_thread(session.muxer.close_all)
+            except Exception:
+                logger.exception("Could not close failed encoders for user %s", session.user_id)
             session.state_machine.transition(RecorderState.ERROR)
             session.error = str(exc)
             session.status = "failed"
 
         finally:
+            self._event_handler.forget(session)
             logger.info("[final] %s | stop_reason=%s", session.stats_line(), reason)
             session.muxer.close_logs()
             session.uploader.write_manifest()
@@ -664,7 +777,10 @@ class StreamRecorder:
             try:
                 await self._completion_callback(session)
             except Exception as e:
+                session.error = str(e)
+                session.uploader.write_manifest()
                 logger.error("Error in completion callback: %s", e)
+                await self._notify(session.user_id, f"Yuborish tugamadi: {e}. Yozuv fayllari saqlab qolindi.")
 
         return session
 
@@ -681,7 +797,7 @@ class StreamRecorder:
     # ── Recovery & cleanup (called by bot.py at startup/shutdown) ─────────
 
     async def recover_incomplete(self) -> None:
-        """Scan for orphaned .recording.json manifests and mark them failed."""
+        """Salvage media and retry undelivered files; retain failed manifests."""
         try:
             for user_dir in glob.glob(os.path.join(OUTPUT_DIR, "*")):
                 if not os.path.isdir(user_dir):
@@ -690,22 +806,55 @@ class StreamRecorder:
                     os.path.join(user_dir, "*.recording.json")
                 ):
                     try:
+                        if any(os.path.abspath(s.manifest_path) == os.path.abspath(manifest)
+                               for s in self.active_sessions.values()):
+                            continue
                         with open(manifest, "r", encoding="utf-8") as f:
                             data = json.load(f)
-                        status = data.get("status", "")
-                        if status in ("stopped", "error", "completed"):
-                            os.remove(manifest)
-                            continue
                         logger.info("Recovering orphaned recording: %s", manifest)
-                        rec_id = data.get("recording_id")
-                        if rec_id and rec_id > 0:
-                            await asyncio.to_thread(
-                                db.finish_recording,
-                                recording_id=rec_id,
-                                status="failed",
-                                error_message="Bot restarted during recording",
-                            )
-                        os.remove(manifest)
+                        session = RecordingSession(int(data["user_id"]), int(data["channel_id"]), data["channel_title"])
+                        session.recording_id = data.get("recording_id", -1)
+                        session.telegram_call_id = data.get("telegram_call_id")
+                        session.started_at = datetime.fromisoformat(data["started_at"])
+                        session.stopped_at = datetime.fromisoformat(data["stopped_at"]) if data.get("stopped_at") else datetime.now()
+                        session.manifest_path = os.path.abspath(manifest)
+                        session.muxer = MuxerManager(os.path.abspath(user_dir), os.path.basename(manifest).removesuffix(".recording.json"))
+                        session.output_path = os.path.join(session.muxer.output_dir, session.muxer.stem + ".mp4")
+                        session.uploaded_parts = set(data.get("uploaded_parts", []))
+                        session.delivery_outputs = data.get("delivery_outputs", {})
+                        session.delivery_sources = data.get("delivery_sources", {})
+                        session.part_actions = data.get("part_actions", {})
+                        session.pending_actions = {int(k): v for k, v in data.get("pending_actions", {}).items()}
+                        session.progress_message_id = data.get("progress_message_id")
+                        parts = await asyncio.to_thread(session.muxer.recover_parts)
+                        candidates = parts or [session.output_path, os.path.splitext(session.output_path)[0] + ".m4a"]
+                        candidates += data.get("archive_files", [])
+                        for path in dict.fromkeys(candidates):
+                            if await asyncio.to_thread(valid_media, path):
+                                session.archive_files.append(path)
+                                match = re.search(r"\.part(\d+)\.", path)
+                                action = session.pending_actions.pop(int(match[1]), None) if match else None
+                                if action:
+                                    session.part_actions[path] = action
+                        session.output_files = [row["path"] for row in data.get("output_files", [])]
+                        session.output_sizes = {row["path"]: row.get("size") or 0 for row in data.get("output_files", [])}
+                        session.is_video = bool(data.get("is_video"))
+                        if not session.archive_files and not session.output_files and not session.uploaded_parts:
+                            logger.warning("No recoverable media; retained manifest %s", manifest)
+                            continue
+                        session.finalizing = True
+                        remaining_raw = glob.glob(os.path.join(session.muxer.output_dir, f"{session.muxer.stem}.e*.mkv")) + glob.glob(os.path.join(session.muxer.output_dir, f"{session.muxer.stem}.e*.mka"))
+                        session.status = "failed" if remaining_raw else "completed"
+                        session.error = "Some encoder files could not be recovered" if remaining_raw else None
+                        session.state_machine.transition(RecorderState.STOPPING)
+                        session.state_machine.transition(RecorderState.STOPPED)
+                        session.stop_reason = "recovered after restart; capture gap may exist"
+                        await asyncio.to_thread(db.finish_recording,
+                            recording_id=session.recording_id, status=session.status,
+                            file_size=sum(session.output_sizes.values()),
+                            error_message=session.stop_reason)
+                        if self._completion_callback:
+                            await self._completion_callback(session)
                     except Exception as exc:
                         logger.warning(
                             "Could not recover manifest %s: %s", manifest, exc
@@ -715,8 +864,7 @@ class StreamRecorder:
 
     async def cleanup_all(self) -> None:
         """Stop all active recording sessions (used during shutdown)."""
-        user_ids = list(self.active_sessions.keys())
-        for user_id in user_ids:
+        async def stop(user_id: int) -> None:
             try:
                 await self.stop_recording(user_id, reason="bot shutdown")
             except Exception as exc:
@@ -725,6 +873,7 @@ class StreamRecorder:
                     user_id,
                     exc,
                 )
+        await asyncio.gather(*(stop(uid) for uid in list(self.active_sessions)))
 
     async def wait_for_deliveries(self, timeout: float = 30) -> None:
         tasks = list(self._stop_tasks.values())

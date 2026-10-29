@@ -14,6 +14,7 @@ import asyncio
 import logging
 import time
 from collections import deque
+from types import SimpleNamespace
 
 from pytgcalls.types import StreamFrames, ChatUpdate, Direction, Device
 
@@ -41,7 +42,7 @@ class EventHandler:
 
     async def handle_update(self, user_id: int, update) -> None:
         session = self.recorder.active_sessions.get(user_id)
-        if not session:
+        if not session or session.finalizing:
             return
         if getattr(update, "chat_id", None) != session.channel_id:
             return
@@ -50,10 +51,23 @@ class EventHandler:
             if update.direction != Direction.INCOMING:
                 return
             if update.device in (Device.MICROPHONE, Device.SPEAKER):
-                payloads = [frame.frame for frame in update.frames if frame.frame]
-                session.audio_mixer.handle_audio_frames(payloads)
+                ticks = {}
+                ordinals = {}
+                for frame in update.frames:
+                    if not frame.frame:
+                        continue
+                    ordinal = ordinals.get(frame.ssrc, 0)
+                    ordinals[frame.ssrc] = ordinal + 1
+                    timestamp = getattr(frame.info, "capture_time", 0) or ordinal
+                    ticks.setdefault(timestamp, []).append(frame.frame)
+                for payloads in ticks.values():
+                    session.audio_mixer.handle_audio_frames(payloads)
             elif update.device in (Device.CAMERA, Device.SCREEN):
-                await self._handle_video_frames(session, update)
+                async with session.media_lock:
+                    for frame in update.frames:
+                        await self._handle_video_frames(
+                            session, SimpleNamespace(device=update.device, frames=[frame])
+                        )
             return
 
         if isinstance(update, ChatUpdate):
@@ -78,6 +92,10 @@ class EventHandler:
         restart (e.g. segment rotation by StreamRecorder)."""
         if generation is not None and generation >= 0:
             self._session_generation[id(session)] = generation
+
+    def forget(self, session) -> None:
+        for mapping in (self._session_generation, self._fps_windows, self._last_restart):
+            mapping.pop(id(session), None)
 
     # ── FPS estimation ────────────────────────────────────────────────────
 
@@ -117,7 +135,9 @@ class EventHandler:
             "Restarting video encoder (%s): measured_fps=%.1f declared_fps=%d",
             why, fps, session.muxer.encoder_fps,
         )
-        generation = session.muxer.start_video_encoder(source=source, fps=fps)
+        session.muxer.request_rotation()
+        session.audio_mixer.request_rotate()
+        generation = session.muxer.start_video_encoder(source=source, fps=fps or None)
         self._session_generation[id(session)] = generation
         return generation
 
@@ -173,6 +193,7 @@ class EventHandler:
             or session.active_video_source.source_type != best_source.source_type
             or session.active_video_source.width != best_source.width
             or session.active_video_source.height != best_source.height
+            or session.active_video_source.rotation != best_source.rotation
         )
 
         frame = next(
@@ -180,6 +201,12 @@ class EventHandler:
             None,
         )
         if not frame or not frame.frame:
+            return
+        if len(frame.frame) != best_source.expected_frame_size:
+            session.muxer.video_frames_dropped += 1
+            logger.warning("Invalid I420 frame: chat=%s ssrc=%s bytes=%s expected=%s",
+                           session.channel_id, frame.ssrc, len(frame.frame),
+                           best_source.expected_frame_size)
             return
         if needs_switch:
             self._fps_windows.pop(id(session), None)
@@ -200,6 +227,10 @@ class EventHandler:
                 best_source.width,
                 best_source.height,
             )
+            if session.muxer.video_segments:
+                # Separate formats avoid a second encode and resolution scaling.
+                session.muxer.request_rotation()
+                session.audio_mixer.request_rotate()
             session.active_video_source = best_source
 
             # Start new encoder at native resolution with measured fps

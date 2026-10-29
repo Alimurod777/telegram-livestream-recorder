@@ -1,6 +1,19 @@
 from enum import Enum, auto
 from dataclasses import dataclass, field
 import time
+import os
+
+
+def media_kind(path: str, info: dict) -> str:
+    """Voice/round-video attributes must come from source metadata, not extensions."""
+    kind = info.get("media_type")
+    if kind in {"voice", "video_note"}:
+        return kind
+    if info.get("has_video") and os.path.splitext(path)[1].lower() == ".mp4":
+        return "video"
+    if info.get("has_audio") and not info.get("has_video"):
+        return "audio"
+    return "document"
 
 
 class SourceType(Enum):

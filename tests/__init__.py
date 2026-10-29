@@ -1,12 +1,12 @@
-"""Test bootstrap: provide a stub config module when the real one
-(gitignored, contains credentials) is absent, so tests run anywhere."""
+"""Isolate tests from production credentials, recordings, and database."""
 
 import sys
 import types
+import atexit
+import os
+import tempfile
 
-try:
-    import config  # noqa: F401
-except ModuleNotFoundError:
+if "config" not in sys.modules:
     _stub = types.ModuleType("config")
     _stub.API_ID = 0
     _stub.API_HASH = ""
@@ -16,7 +16,11 @@ except ModuleNotFoundError:
     _stub.RECORDING_CHUNK_BYTES = 1_850_000_000
     _stub.OUTPUT_DIR = "recordings"
     _stub.MAX_UPLOAD_SIZE = 2 * 1024 * 1024 * 1024
-    _stub.DATABASE_FILE = ":memory:"
+    _temporary = tempfile.TemporaryDirectory(prefix="telegram-recorder-tests-")
+    atexit.register(_temporary.cleanup)
+    _stub.DATABASE_FILE = os.path.join(_temporary.name, "test.db")
+    _stub.OUTPUT_DIR = os.path.join(_temporary.name, "recordings")
+    _stub.LOG_FILE = os.path.join(_temporary.name, "recorder.log")
     _stub.VIDEO_WIDTH = 1280
     _stub.VIDEO_HEIGHT = 720
     _stub.VIDEO_FPS = 30

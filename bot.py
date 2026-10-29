@@ -25,11 +25,15 @@ import urllib.request
 import uuid
 from io import BytesIO
 from typing import Any, Dict, Optional
+from types import SimpleNamespace
+from datetime import datetime
 
 import qrcode
-from pyrogram import Client, enums, filters, raw
-from pyrogram.errors import FloodWait, PhoneCodeExpired, PhoneCodeInvalid, SessionPasswordNeeded
-from pyrogram.handlers import MessageHandler
+from pyrogram import Client, enums, filters, raw, utils
+from pyrogram.errors import (FloodWait, PhoneCodeExpired, PhoneCodeInvalid,
+                             SessionPasswordNeeded, PhoneMigrate, NetworkMigrate,
+                             PasswordHashInvalid)
+from pyrogram.handlers import MessageHandler, RawUpdateHandler
 
 import config as _config
 from config import (
@@ -44,6 +48,7 @@ from database import db
 from ffmpeg_helper import get_ffmpeg_path, get_ffprobe_path
 from livestream.accounts import account_manager
 from livestream.mtproto_uploader import mtproto_uploader
+from livestream.metadata import media_kind
 from stream_recorder import RecordingSession, stream_recorder
 
 WAIT_PROBE_INTERVAL = int(getattr(_config, "WAIT_PROBE_INTERVAL", 120))
@@ -55,7 +60,7 @@ BOT_USERNAME: str = ""
 # ── Logging (rotating 5 MB × 3 backups) ─────────────────────────────────────
 
 _log_handler = logging.handlers.RotatingFileHandler(
-    "recorder.log", maxBytes=5 * 1024 * 1024, backupCount=3, encoding="utf-8"
+    getattr(_config, "LOG_FILE", "recorder.log"), maxBytes=5 * 1024 * 1024, backupCount=3, encoding="utf-8"
 )
 logging.basicConfig(
     level=logging.INFO,
@@ -74,11 +79,14 @@ HELP_TEXT = (
     "/help - barcha komandalar va hozirgi cheklovni korsatadi\n"
     "/login\\_qr - Telegram ichidan QR orqali login qiladi\n"
     "/login\\_phone - telefon raqam va kod bilan login qiladi\n"
+    "/login - telefon orqali login (/login\\_phone bilan bir xil)\n"
     "/login\\_session <session string> - tayyor session string bilan login qiladi\n"
     "/target <username|id|link> - record qilinadigan kanal yoki chatni saqlaydi\n"
-    "/record [channel_id] - efir yozuvini boshlaydi (efir boshlanmagan bolsa "
+    "/record [ID|username|link] - guruh yoki kanal efirini yozadi (efir boshlanmagan bolsa "
     "kutish rejimi taklif qilinadi)\n"
-    "/stop - yozuvni yoki kutish rejimini toxtatadi\n"
+    "Masalan: `/record -1001234567890` yoki `/record https://t.me/channel?livestream`\n"
+    "/send - argumentsiz yuboring: hozirgi yozuv nusxasini yuboradi va yozishda davom etadi\n"
+    "/stop - to‘xtatadi; oxirgi avtomatik bo‘lakdan keyingi yozuvni birlashtirib yuboradi\n"
     "/status - login, target va recording holatini korsatadi\n"
     "/accounts - akkauntlar havzasini korish\n"
     "/addaccount <session string> [label] - zaxira akkaunt qoshadi "
@@ -89,8 +97,11 @@ HELP_TEXT = (
     "*Hozirgi holat*\n"
     "Backend: py-tgcalls / ntgcalls\n"
     "Media capture: audio + video (native sifatda)\n"
-    "Uzun efirlar ~1.5 GB bo'laklarga bolinadi va yozish davomida yuboriladi.\n"
-    "Efir tugaganda yozuv shu botdagi shaxsiy chatga yuboriladi."
+    "Chegara: 4 soat. Holat xabari har 5 soniyada yangilanadi.\n"
+    "~1.97 GB ga yaqin qism avtomatik yuboriladi, yakunda qayta qo‘shilmaydi.\n"
+    "Chegaraga yetmasa, /send nusxasi bilan qolgan yozuv yakunda bitta fayl qilinadi.\n"
+    "Video yozuv video va alohida audio sifatida yuboriladi.\n"
+    "Xususiy kanal/guruh uchun login qilingan akkaunt a’zo bo‘lishi kerak; ID yetarli."
 )
 
 # ── Global state ─────────────────────────────────────────────────────────────
@@ -100,8 +111,10 @@ user_clients: Dict[int, Client] = {}
 user_login_data: Dict[int, Dict[str, Any]] = {}
 user_client_handlers: Dict[int, tuple] = {}
 user_client_locks: Dict[int, asyncio.Lock] = {}
+user_restore_locks: Dict[int, asyncio.Lock] = {}
 # waiting mode: user_id -> {"channel_id", "title", "chat_id", "task"}
 waiting_sessions: Dict[int, Dict[str, Any]] = {}
+record_requests: Dict[int, asyncio.Task] = {}
 background_tasks: set[asyncio.Task] = set()
 _shutdown_event: Optional[asyncio.Event] = None
 
@@ -112,8 +125,17 @@ class UserState:
     WAITING_PHONE = "waiting_phone"
     WAITING_CODE = "waiting_code"
     WAITING_PASSWORD = "waiting_password"
+    WAITING_EMAIL = "waiting_email"
+    WAITING_EMAIL_CODE = "waiting_email_code"
     LOGGED_IN = "logged_in"
     RECORDING = "recording"
+
+
+class BotAPIError(RuntimeError):
+    def __init__(self, result: Dict[str, Any]):
+        self.code = int(result.get("error_code") or 0)
+        self.retry_after = int((result.get("parameters") or {}).get("retry_after") or 0)
+        super().__init__(result.get("description") or "Bot API request failed")
 
 
 # ── Single-instance lock (PID file based, crash-safe) ────────────────────────
@@ -242,7 +264,11 @@ def bot_api(method: str, data: Optional[Dict[str, Any]] = None, timeout: int = 6
     except urllib.error.HTTPError as exc:
         body = exc.read().decode("utf-8", errors="replace")
         logger.error("Bot API %s HTTP %s: %s", method, exc.code, body)
-        raise
+        try:
+            result = json.loads(body)
+        except ValueError:
+            raise
+        raise BotAPIError(result) from None
     except urllib.error.URLError as exc:
         logger.error("Bot API %s network error: %s", method, exc.reason)
         raise
@@ -361,13 +387,9 @@ def bot_api_upload_file(
         connection.send(body_suffix)
         response = connection.getresponse()
         response_body = response.read().decode("utf-8", errors="replace")
-        if response.status >= 400:
-            raise RuntimeError(
-                f"Bot API {method} HTTP {response.status}: {response_body}"
-            )
         result = json.loads(response_body)
-        if not result.get("ok"):
-            raise RuntimeError(f"Bot API {method} failed: {response_body}")
+        if response.status >= 400 or not result.get("ok"):
+            raise BotAPIError(result)
         return result
     finally:
         connection.close()
@@ -381,6 +403,10 @@ async def edit_message_text(chat_id: int, message_id: int, text: str):
         )
     try:
         return await asyncio.to_thread(run)
+    except BotAPIError as exc:
+        if exc.retry_after:
+            await asyncio.sleep(exc.retry_after)
+        return None
     except Exception:
         return None
 
@@ -450,13 +476,14 @@ def probe_media(path: str) -> Dict[str, Any]:
     """Probe duration/dimensions via ffprobe (best-effort)."""
     info: Dict[str, Any] = {
         "duration": 0, "width": 0, "height": 0, "has_video": False,
+        "has_audio": False,
     }
     try:
         result = subprocess.run(
             [
                 get_ffprobe_path(), "-v", "error",
                 "-show_entries",
-                "format=duration:stream=codec_type,width,height",
+                "format=duration:format_tags=title,artist:stream=codec_type,codec_name,width,height:stream_tags=title,artist",
                 "-of", "json", path,
             ],
             capture_output=True, text=True, timeout=60,
@@ -465,6 +492,12 @@ def probe_media(path: str) -> Dict[str, Any]:
         data = json.loads(result.stdout or "{}")
         streams = data.get("streams") or []
         video = next((s for s in streams if s.get("codec_type") == "video"), None)
+        audio = next((s for s in streams if s.get("codec_type") == "audio"), None)
+        info["has_audio"] = audio is not None
+        tags = {**((data.get("format") or {}).get("tags") or {}),
+                **((audio or {}).get("tags") or {})}
+        info["title"] = tags.get("title")
+        info["performer"] = tags.get("artist")
         if video:
             info["has_video"] = True
             info["width"] = int(video.get("width") or 0)
@@ -485,14 +518,14 @@ def extract_thumbnail(path: str, at_sec: float = 5.0) -> Optional[bytes]:
             [
                 get_ffmpeg_path(), "-y", "-hide_banner", "-loglevel", "error",
                 "-ss", str(at_sec), "-i", path,
-                "-frames:v", "1", "-vf", "scale=320:-2",
+                "-frames:v", "1", "-vf", "scale=320:320:force_original_aspect_ratio=decrease",
                 "-f", "image2", "-q:v", "4", "pipe:1",
             ],
             capture_output=True, timeout=60,
             creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
         )
         data = result.stdout
-        return data if data and len(data) > 100 else None
+        return data if data and 100 < len(data) < 200_000 else None
     except Exception:
         return None
 
@@ -503,6 +536,7 @@ async def send_recording_file(
     caption: str,
     channel_title: str = "",
     progress_message_id: Optional[int] = None,
+    media_type: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Send a recording the way Telegram represents it natively:
 
@@ -519,11 +553,17 @@ async def send_recording_file(
 
     ext = os.path.splitext(file_path)[1].lower()
     info = await asyncio.to_thread(probe_media, file_path)
+    info["media_type"] = media_type
+    kind = media_kind(file_path, info)
     fields: Dict[str, Any] = {"chat_id": chat_id, "caption": caption}
     method, file_field = "sendDocument", "document"
     extra_files: Optional[Dict[str, tuple]] = None
 
-    if info["has_video"] and ext == ".mp4":
+    if kind == "video_note":
+        method, file_field = "sendVideoNote", "video_note"
+        fields.pop("caption", None)
+        fields.update(duration=info["duration"], length=info["width"])
+    elif kind == "video":
         method, file_field = "sendVideo", "video"
         fields.update(
             {
@@ -536,14 +576,14 @@ async def send_recording_file(
         thumb = await asyncio.to_thread(extract_thumbnail, file_path)
         if thumb:
             extra_files = {"thumbnail": ("thumb.jpg", thumb, "image/jpeg")}
-    elif ext in (".ogg", ".opus", ".oga"):
+    elif kind == "voice":
         method, file_field = "sendVoice", "voice"
         fields["duration"] = info["duration"]
-    elif not info["has_video"]:
+    elif kind == "audio" and ext in (".mp3", ".m4a"):
         method, file_field = "sendAudio", "audio"
         fields["duration"] = info["duration"]
-        fields["performer"] = channel_title or "Telegram Live"
-        fields["title"] = os.path.splitext(os.path.basename(file_path))[0]
+        fields["performer"] = info.get("performer") or channel_title or "Telegram Live"
+        fields["title"] = info.get("title") or os.path.splitext(os.path.basename(file_path))[0]
         thumb = await asyncio.to_thread(extract_thumbnail, file_path)
         if thumb:
             extra_files = {"thumbnail": ("thumb.jpg", thumb, "image/jpeg")}
@@ -569,24 +609,16 @@ async def send_recording_file(
         )
 
     last_error: Optional[Exception] = None
-    for retry_round in range(2):
-        candidates = (
-            [(method, file_field, fields, extra_files), ("sendDocument", "document",
-              {"chat_id": chat_id, "caption": caption}, None)]
-            if retry_round == 0
-            else [("sendDocument", "document", {"chat_id": chat_id, "caption": caption}, None)]
-        )
-        for m, f_field, f_fields, f_extra in candidates:
-            for attempt_no in range(1, 4):
-                try:
-                    return await attempt(m, f_field, f_fields, f_extra)
-                except Exception as exc:
-                    last_error = exc
-                    logger.warning(
-                        "Upload %s attempt %s failed: %s", m, attempt_no, exc
-                    )
-                    if attempt_no < 3:
-                        await asyncio.sleep(attempt_no * 5)
+    for attempt_no in range(1, 4):
+        try:
+            return await attempt(method, file_field, fields, extra_files)
+        except Exception as exc:
+            last_error = exc
+            if isinstance(exc, BotAPIError) and exc.code in (400, 401, 403, 413):
+                raise
+            logger.warning("Upload %s attempt %s failed: %s", method, attempt_no, exc)
+            if attempt_no < 3:
+                await asyncio.sleep(max(attempt_no * 5, getattr(exc, "retry_after", 0)))
     raise RuntimeError(f"Could not upload {file_path}: {last_error}")
 
 
@@ -624,24 +656,20 @@ def attach_user_client_handlers(user_id: int, client: Client) -> None:
             return
 
         if ended is not None:
+            session = stream_recorder.get_session(user_id)
+            if session and session.channel_id == int(message.chat.id):
+                track_background_task(asyncio.create_task(
+                    stream_recorder.stop_recording(user_id, reason="livestream ended")
+                ))
             return
 
         # 2. livestream started -> auto start for matching target or waiting mode
         target = db.get_target(user_id)
         waiting = waiting_sessions.get(user_id)
         channel_id = int(message.chat.id)
-        match = (
-            waiting and waiting["channel_id"] == channel_id
-        ) or (
-            target and int(target["id"]) == channel_id and not waiting
-        )
+        match = waiting and waiting["channel_id"] == channel_id
         if not match:
             return
-
-        if waiting:
-            waiting_sessions.pop(user_id, None)
-            if waiting.get("task"):
-                waiting["task"].cancel()
 
         title = (
             (waiting or {}).get("title")
@@ -658,6 +686,11 @@ def attach_user_client_handlers(user_id: int, client: Client) -> None:
                 channel_title=title,
                 automatic=True,
             )
+            if waiting_sessions.get(user_id) is waiting:
+                waiting_sessions.pop(user_id, None)
+                await asyncio.to_thread(db.delete_waiting, user_id)
+                if waiting.get("task"):
+                    waiting["task"].cancel()
         except Exception:
             logger.exception(
                 "Automatic recording trigger failed: user=%s channel=%s",
@@ -667,7 +700,46 @@ def attach_user_client_handlers(user_id: int, client: Client) -> None:
 
     handler = MessageHandler(live_chat_service_handler, filters.service)
     client.add_handler(handler, group=50)
-    user_client_handlers[user_id] = (client, handler, 50)
+
+    async def group_call_update(_: Client, update, users, chats) -> None:
+        if not isinstance(update, raw.types.UpdateGroupCall):
+            return
+        session = stream_recorder.get_session(user_id)
+        if isinstance(update.call, raw.types.GroupCallDiscarded):
+            if session and getattr(session, "telegram_call_id", None) == update.call.id:
+                track_background_task(asyncio.create_task(
+                    stream_recorder.stop_recording(user_id, reason="group call discarded")
+                ))
+            return
+        waiting = waiting_sessions.get(user_id)
+        if not waiting or getattr(update.call, "schedule_date", None):
+            return
+        peer = getattr(update, "peer", None)
+        if peer is not None:
+            chat_id = utils.get_peer_id(peer)
+        else:
+            raw_id = getattr(update, "chat_id", None)
+            entity = chats.get(raw_id)
+            chat_id = (-1_000_000_000_000 - raw_id
+                       if isinstance(entity, raw.types.Channel) else -raw_id) if raw_id else None
+        if chat_id != waiting["channel_id"]:
+            return
+        try:
+            await start_recording_for_user(
+                user_id, waiting["chat_id"], client, chat_id,
+                waiting["title"], automatic=True,
+            )
+            if waiting_sessions.get(user_id) is waiting:
+                waiting_sessions.pop(user_id, None)
+                await asyncio.to_thread(db.delete_waiting, user_id)
+                if waiting.get("task"):
+                    waiting["task"].cancel()
+        except Exception:
+            logger.exception("Group call start trigger failed: user=%s chat=%s", user_id, chat_id)
+
+    raw_handler = RawUpdateHandler(group_call_update)
+    client.add_handler(raw_handler, group=51)
+    user_client_handlers[user_id] = (client, handler, raw_handler)
 
 
 def datetime_from_unix(ts: int) -> str:
@@ -684,12 +756,17 @@ async def activate_user_client(user_id: int, client: Client) -> Client:
             client.me = await client.get_me()
         await client.initialize()
     user_clients[user_id] = client
-    user_states[user_id] = UserState.LOGGED_IN
+    user_states[user_id] = UserState.RECORDING if stream_recorder.is_recording(user_id) else UserState.LOGGED_IN
     db.update_activity(user_id)
     return client
 
 
 async def get_user_client(user_id: int) -> Optional[Client]:
+    async with user_restore_locks.setdefault(user_id, asyncio.Lock()):
+        return await _get_user_client_unlocked(user_id)
+
+
+async def _get_user_client_unlocked(user_id: int) -> Optional[Client]:
     if (
         user_states.get(user_id)
         in {
@@ -697,8 +774,10 @@ async def get_user_client(user_id: int) -> Optional[Client]:
             UserState.WAITING_PHONE,
             UserState.WAITING_CODE,
             UserState.WAITING_PASSWORD,
+            UserState.WAITING_EMAIL,
+            UserState.WAITING_EMAIL_CODE,
         }
-        and not db.get_session_string(user_id)
+        and not await asyncio.to_thread(db.get_session_string, user_id)
     ):
         return None
     client = user_clients.get(user_id)
@@ -706,12 +785,13 @@ async def get_user_client(user_id: int) -> Optional[Client]:
         if client.is_connected:
             return await activate_user_client(user_id, client)
         try:
-            await client.start()
+            if not await client.connect():
+                raise RuntimeError("Stored session is no longer authorized")
             return await activate_user_client(user_id, client)
         except Exception:
             user_clients.pop(user_id, None)
 
-    session_string = db.get_session_string(user_id)
+    session_string = await asyncio.to_thread(db.get_session_string, user_id)
     if not session_string:
         return None
     try:
@@ -719,9 +799,14 @@ async def get_user_client(user_id: int) -> Optional[Client]:
             f"user_{user_id}",
             api_id=API_ID, api_hash=API_HASH,
             session_string=session_string, in_memory=True,
+            sleep_threshold=0,
         )
-        await client.start()
-        return await activate_user_client(user_id, client)
+        if not await client.connect():
+            await client.disconnect()
+            raise RuntimeError("Stored session is no longer authorized")
+        restored = await activate_user_client(user_id, client)
+        await save_user_session(user_id, restored)
+        return restored
     except Exception as exc:
         logger.warning("Failed to restore session for %s: %s", user_id, exc)
         return None
@@ -730,10 +815,12 @@ async def get_user_client(user_id: int) -> Optional[Client]:
 async def save_user_session(user_id: int, client: Client):
     try:
         session_string = await client.export_session_string()
-        db.save_session(user_id, f"user_{user_id}", session_string)
+        if not await asyncio.to_thread(db.save_session, user_id, f"user_{user_id}", session_string):
+            raise RuntimeError("Could not persist the authorized session")
         db.update_activity(user_id)
     except Exception as exc:
         logger.error("save_user_session %s: %s", user_id, exc)
+        raise
 
 
 # ── QR login ─────────────────────────────────────────────────────────────────
@@ -769,18 +856,25 @@ async def wait_for_qr_login(user_id: int, chat_id: int):
         return
     for _ in range(60):
         await asyncio.sleep(2)
+        if user_clients.get(user_id) is not client or user_states.get(user_id) != UserState.WAITING_QR:
+            return
         try:
             result = await client.invoke(
                 raw.functions.auth.ExportLoginToken(api_id=API_ID, api_hash=API_HASH, except_ids=[])
             )
             if isinstance(result, raw.types.auth.LoginTokenSuccess):
+                await store_authorization(client, result.authorization)
                 await client.invoke(raw.functions.updates.GetState())
                 await activate_user_client(user_id, client)
                 await save_user_session(user_id, client)
                 await send_message(chat_id, "✅ Login successful. Use /target <channel>.")
                 return
             if isinstance(result, raw.types.auth.LoginTokenMigrateTo):
-                await client.invoke(raw.functions.auth.ImportLoginToken(token=result.token))
+                await migrate_login_dc(client, result.dc_id)
+                result = await client.invoke(raw.functions.auth.ImportLoginToken(token=result.token))
+                if not isinstance(result, raw.types.auth.LoginTokenSuccess):
+                    raise RuntimeError("QR authorization was not completed")
+                await store_authorization(client, result.authorization)
                 await activate_user_client(user_id, client)
                 await save_user_session(user_id, client)
                 await send_message(chat_id, "✅ Login successful. Use /target <channel>.")
@@ -798,6 +892,80 @@ async def wait_for_qr_login(user_id: int, chat_id: int):
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
+
+async def migrate_login_dc(client: Client, dc_id: int) -> None:
+    from pyrogram.session import Auth, Session
+    await client.session.stop()
+    await client.storage.dc_id(dc_id)
+    await client.storage.auth_key(await Auth(client, dc_id, await client.storage.test_mode()).create())
+    client.session = Session(client, dc_id, await client.storage.auth_key(),
+                             await client.storage.test_mode())
+    await client.session.start()
+
+
+async def send_code_raw(client: Client, phone_number: str):
+    """Adapted from savebotnew/TechVJ/generate.py (TechVJ / @VJ_Botz)."""
+    for _ in range(3):
+        try:
+            return await client.invoke(raw.functions.auth.SendCode(
+                phone_number=phone_number.strip(" +"),
+                api_id=API_ID, api_hash=API_HASH,
+                settings=raw.types.CodeSettings(
+                    allow_flashcall=False, current_number=False,
+                    allow_app_hash=True, allow_missed_call=False,
+                    allow_firebase=False,
+                ),
+            ))
+        except (PhoneMigrate, NetworkMigrate) as exc:
+            await migrate_login_dc(client, exc.value)
+    raise RuntimeError("Telegram login DC migration limit reached")
+
+
+async def clear_pending_login(user_id: int) -> None:
+    user_login_data.pop(user_id, None)
+    if user_states.get(user_id) in {
+        UserState.WAITING_PHONE, UserState.WAITING_CODE, UserState.WAITING_PASSWORD,
+        UserState.WAITING_EMAIL, UserState.WAITING_EMAIL_CODE, UserState.WAITING_QR,
+    }:
+        client = user_clients.pop(user_id, None)
+        if client and client.is_connected:
+            try:
+                await client.disconnect()
+            except Exception:
+                logger.warning("Could not disconnect pending login: user=%s", user_id)
+        user_states[user_id] = UserState.IDLE
+
+
+async def store_authorization(client: Client, authorization) -> None:
+    if not isinstance(authorization, raw.types.auth.Authorization):
+        raise RuntimeError("Register this account in an official Telegram app first")
+    await client.storage.user_id(authorization.user.id)
+    await client.storage.is_bot(False)
+
+
+async def accept_sent_code(user_id: int, chat_id: int, sent) -> None:
+    data = user_login_data[user_id]
+    if isinstance(sent, raw.types.auth.SentCodeSuccess):
+        client = user_clients[user_id]
+        await store_authorization(client, sent.authorization)
+        await activate_user_client(user_id, client)
+        await save_user_session(user_id, client)
+        user_login_data.pop(user_id, None)
+        await send_message(chat_id, "Login successful. Use /target <channel>.")
+        return
+    data["phone_code_hash"] = sent.phone_code_hash
+    if isinstance(sent.type, raw.types.auth.SentCodeTypeSetUpEmailRequired):
+        user_states[user_id] = UserState.WAITING_EMAIL
+        await send_message(chat_id, "Telegram requires a login email. Send your email address.")
+    else:
+        data["email_login"] = isinstance(sent.type, raw.types.auth.SentCodeTypeEmailCode)
+        data.setdefault("code_attempts", 0)
+        user_states[user_id] = UserState.WAITING_CODE
+        destination = "emailingizga" if data["email_login"] else "Telegram ilovangizga"
+        await send_message(chat_id, f"Kod {destination} yuborildi.\n"
+                           "Kodni raqamlar orasiga bo‘sh joy qo‘yib, bitta xabarda yuboring.\n"
+                           "Masalan, kod `12345` bo‘lsa: `1 2 3 4 5`\n"
+                           "Bekor qilish: /cancel")
 
 def parse_channel_input(text: str):
     """Returns int for numeric IDs, str for usernames."""
@@ -817,7 +985,24 @@ def parse_channel_input(text: str):
 async def resolve_chat(client: Client, reference):
     """Resolve numeric private peers after warming Pyrogram's dialog cache."""
     try:
-        return await client.get_chat(reference)
+        peer = await client.resolve_peer(reference)
+        if isinstance(peer, raw.types.InputPeerChannel):
+            result = await client.invoke(raw.functions.channels.GetFullChannel(
+                channel=raw.types.InputChannel(channel_id=peer.channel_id, access_hash=peer.access_hash)
+            ))
+            chat_id = utils.get_channel_id(peer.channel_id)
+            entity_id = peer.channel_id
+        elif isinstance(peer, raw.types.InputPeerChat):
+            result = await client.invoke(raw.functions.messages.GetFullChat(chat_id=peer.chat_id))
+            chat_id, entity_id = -peer.chat_id, peer.chat_id
+        else:
+            return await client.get_chat(reference)
+        entity = next(c for c in result.chats if c.id == entity_id)
+        # Retain the call already returned by the full-chat RPC; parsing the
+        # full Pyrogram Chat also fetches unrelated pinned messages/stories.
+        return SimpleNamespace(id=chat_id, title=getattr(entity, "title", None),
+                               username=getattr(entity, "username", None),
+                               _recorder_call=getattr(result.full_chat, "call", None))
     except FloodWait:
         raise
     except Exception:
@@ -846,6 +1031,7 @@ async def start_recording_for_user(
     channel_id: int,
     channel_title: str,
     automatic: bool = False,
+    known_call: Any = None,
 ) -> RecordingSession:
     """Start a recording, failing over to pool accounts on FloodWait/errors.
 
@@ -866,7 +1052,13 @@ async def start_recording_for_user(
 
         while candidate_client is not None:
             try:
-                await resolve_chat(candidate_client, channel_id)
+                if candidate_client is client and known_call is not None:
+                    call = known_call
+                else:
+                    chat = await resolve_chat(candidate_client, channel_id)
+                    call = await get_channel_call(candidate_client, chat)
+                if call is None:
+                    raise RuntimeError("The livestream is not active")
                 session = await stream_recorder.start_recording(
                     user_id=user_id,
                     channel_id=channel_id,
@@ -874,10 +1066,10 @@ async def start_recording_for_user(
                     client=candidate_client,
                     is_video=True,
                     account_id=account_id,
+                    telegram_call_id=call.id,
                 )
-                if account_id is not None:
-                    account_manager.mark_busy(account_id)
                 user_states[user_id] = UserState.RECORDING
+                session._progress_task = track_background_task(asyncio.create_task(recording_progress(session)))
                 if automatic:
                     await send_message(
                         chat_id,
@@ -887,6 +1079,8 @@ async def start_recording_for_user(
                 return session
             except Exception as exc:
                 last_exc = exc
+                if account_id is not None:
+                    account_manager.mark_free(account_id)
                 text = str(exc).lower()
                 flood_like = isinstance(exc, FloodWait) or any(
                     key in text for key in ("flood", "too many requests")
@@ -896,6 +1090,8 @@ async def start_recording_for_user(
                     for key in (
                         "peer", "participant", "forbidden", "channel_invalid",
                         "chat_admin_required", "user_banned",
+                        "capacity reached", "already recording this chat",
+                        "auth_key_unregistered", "session_revoked", "session_expired", "user_deactivated",
                     )
                 )
                 if account_id is not None and flood_like:
@@ -910,7 +1106,7 @@ async def start_recording_for_user(
                     account_id or "own session", user_id, exc,
                 )
 
-            pool = await account_manager.pick_account(exclude=tried_accounts)
+            pool = await account_manager.pick_account(user_id, exclude=tried_accounts)
             if not pool:
                 break
             candidate_client, account_id = pool
@@ -927,18 +1123,18 @@ async def recover_recording_account(
     if previous_id is not None:
         account_manager.mark_flood(previous_id, _flood_seconds(exc), str(exc))
     exclude = {previous_id} if previous_id is not None else set()
-    while replacement := await account_manager.pick_account(exclude=exclude):
+    while replacement := await account_manager.pick_account(session.user_id, exclude=exclude):
         client, account_id = replacement
         try:
             await resolve_chat(client, session.channel_id)
         except Exception as resolve_error:
+            account_manager.mark_free(account_id)
             if isinstance(resolve_error, FloodWait):
                 account_manager.mark_flood(
                     account_id, _flood_seconds(resolve_error), str(resolve_error)
                 )
             exclude.add(account_id)
             continue
-        account_manager.mark_busy(account_id)
         if previous_id is not None:
             account_manager.mark_free(previous_id)
         logger.info(
@@ -949,10 +1145,25 @@ async def recover_recording_account(
     return None
 
 
-async def upload_part(session: RecordingSession, file_path: str, index: int, total: int) -> bool:
+async def upload_part(session: RecordingSession, file_path: str, index: int, total: int,
+                      allow_split: bool = True) -> bool:
     """Upload one immutable segment and delete it only after full success."""
     if not os.path.exists(file_path):
         raise FileNotFoundError(file_path)
+    if file_path in session.uploaded_parts:
+        return True
+    limit = int(getattr(_config, "USERBOT_UPLOAD_LIMIT", 1_990_000_000)) if USE_USERBOT_UPLOAD else BOT_API_UPLOAD_LIMIT
+    if os.path.getsize(file_path) > limit:
+        if not allow_split:
+            raise RuntimeError("Delivery window exceeds upload limit; retained for recovery")
+        children = await stream_recorder.split_if_needed(file_path, limit, delete_original=False)
+        for child in children:
+            if child not in session.uploaded_parts:
+                await upload_part(session, child, index, total)
+        session.uploaded_parts.add(file_path)
+        session.uploader.write_manifest()
+        os.remove(file_path)
+        return True
     size_mb = os.path.getsize(file_path) / (1024 * 1024)
     caption = (
         f"{session.channel_title}\n"
@@ -963,6 +1174,7 @@ async def upload_part(session: RecordingSession, file_path: str, index: int, tot
         client = user_clients.get(session.user_id)
         if client and client.is_connected and BOT_USERNAME:
             info = await asyncio.to_thread(probe_media, file_path)
+            info.update(chat_id=session.channel_id, stream_id=session.telegram_call_id or session.recording_id)
             if info.get("has_video"):
                 info["thumb"] = await asyncio.to_thread(
                     extract_thumbnail, file_path
@@ -974,6 +1186,7 @@ async def upload_part(session: RecordingSession, file_path: str, index: int, tot
                         channel_title=session.channel_title,
                     )
                     session.uploaded_parts.add(file_path)
+                    session.uploader.write_manifest()
                     try:
                         os.remove(file_path)
                     except OSError as cleanup_error:
@@ -1003,11 +1216,13 @@ async def upload_part(session: RecordingSession, file_path: str, index: int, tot
 
     files = [file_path]
     if os.path.getsize(file_path) > BOT_API_UPLOAD_LIMIT:
+        if not allow_split:
+            raise RuntimeError("MTProto upload was not confirmed; recording retained without re-splitting")
         files = await stream_recorder.split_if_needed(
             file_path, max_bytes=BOT_API_UPLOAD_LIMIT, delete_original=False
         )
-    try:
-        for part_path in files:
+    for part_path in files:
+        if part_path not in session.uploaded_parts:
             part_caption = (
                 caption if len(files) == 1
                 else f"{caption} ({os.path.basename(part_path)})"
@@ -1016,34 +1231,26 @@ async def upload_part(session: RecordingSession, file_path: str, index: int, tot
                 session.user_id, part_path, part_caption,
                 channel_title=session.channel_title,
             )
-        session.uploaded_parts.add(file_path)
+            session.uploaded_parts.add(part_path)
+            session.uploader.write_manifest()
+    session.uploaded_parts.add(file_path)
+    session.uploader.write_manifest()
+    for part_path in set(files + [file_path]):
         try:
-            os.remove(file_path)
+            os.remove(part_path)
         except OSError as cleanup_error:
-            logger.warning("Could not remove uploaded file %s: %s", file_path, cleanup_error)
-        return True
-    finally:
-        for part_path in files:
-            if part_path == file_path:
-                continue
-            try:
-                os.remove(part_path)
-            except OSError:
-                pass
+            logger.warning("Could not remove uploaded file %s: %s", part_path, cleanup_error)
+    return True
 
 
 async def on_part_ready(session: RecordingSession, path: str) -> None:
     """Serialize rolling uploads with final delivery."""
     async with session.upload_lock:
         try:
-            index = len(session.uploaded_parts) + 1
-            await send_message(
-                session.user_id,
-                f"📤 Segment {index} ready ({os.path.getsize(path) / 1e9:.2f} GB). "
-                "Uploading while recording continues...",
-            )
-            await upload_part(session, path, index, index)
-            await send_message(session.user_id, f"✅ Segment {index} uploaded.")
+            action = session.part_actions.get(path)
+            if not action:
+                return
+            await deliver_window(session, path, action)
         except Exception as exc:
             logger.exception("Rolling upload of %s failed: %s", path, exc)
             await send_message(
@@ -1053,8 +1260,66 @@ async def on_part_ready(session: RecordingSession, path: str) -> None:
             )
 
 
+def progress_text(session: RecordingSession) -> str:
+    end = session.stopped_at or datetime.now()
+    elapsed = max(0, int((end - session.started_at).total_seconds()))
+    hours, remainder = divmod(elapsed, 3600)
+    minutes, seconds = divmod(remainder, 60)
+    state = "Yuborildi" if getattr(session, "delivery_complete", False) else "Xato: " + session.error if session.error else "Tayyorlanmoqda" if session.finalizing else "Yozilmoqda"
+    source = session.active_video_source
+    media = f"Video + audio ({source.width}×{source.height})" if source else "Audio"
+    return (f"🔴 {session.channel_title}\n{state}\n"
+            f"Yozuv boshlanganiga: {hours:02d}:{minutes:02d}:{seconds:02d}\n"
+            f"Maksimal vaqt: 04:00:00\nJoriy qism: {session.pending_bytes() / 1_000_000:.1f} MB / ~1970 MB\n"
+            f"{media}\n/send — nusxani yuborish, davom etish\n/stop — tugatish")
+
+
+async def recording_progress(session: RecordingSession) -> None:
+    while True:
+        if session.delivery_complete:
+            return
+        try:
+            if session.progress_message_id:
+                await edit_message_text(session.user_id, session.progress_message_id, progress_text(session))
+            else:
+                result = await send_message(session.user_id, progress_text(session))
+                if result and result.get("ok"):
+                    session.progress_message_id = result["result"]["message_id"]
+            await asyncio.to_thread(session.uploader.write_manifest)
+        except Exception:
+            logger.warning("Progress update failed: user=%s", session.user_id, exc_info=True)
+        if session.delivery_complete or (session.finalizing and session.error):
+            return
+        await asyncio.sleep(5)
+
+
+async def deliver_window(session: RecordingSession, boundary: Optional[str], action: str) -> None:
+    def index(path: str) -> int:
+        match = re.search(r"\.part(\d+)\.", path)
+        return int(match[1]) if match else -1
+    sources = [p for p in session.archive_files if os.path.exists(p)
+               and (boundary is None or index(p) <= index(boundary))]
+    tag = ("preview" if action == "preview" else "chunk") + str(index(boundary)) if boundary else "final"
+    key = os.path.join(session.muxer.output_dir, session.muxer.stem + "." + tag)
+    if not sources and key not in session.delivery_outputs:
+        return
+    await send_message(session.user_id, "📤 Yozuv tayyorlanmoqda: video bo‘lsa, video va alohida audio yuboriladi.")
+    outputs = await asyncio.to_thread(session.uploader.prepare_delivery, sources, tag)
+    for number, path in enumerate(outputs, 1):
+        if path not in session.uploaded_parts:
+            await upload_part(session, path, number, len(outputs), allow_split=False)
+    if action != "preview":
+        await asyncio.to_thread(session.uploader.retire_sources, tag)
+    if boundary:
+        session.part_actions.pop(boundary, None)
+    if action == "capacity":
+        session.capacity_pending = False
+    session.uploader.write_manifest()
+    await send_message(session.user_id, "✅ Yozuv yuborildi." + (" Yozish davom etmoqda." if not session.finalizing else ""))
+
+
 async def deliver_recording(session: RecordingSession) -> None:
-    user_states[session.user_id] = UserState.LOGGED_IN
+    user_states[session.user_id] = UserState.RECORDING if stream_recorder.is_recording(session.user_id) else UserState.LOGGED_IN
     if session.account_id is not None:
         account_manager.mark_free(session.account_id)
 
@@ -1065,37 +1330,20 @@ async def deliver_recording(session: RecordingSession) -> None:
                 "Recording could not be finalized.\n"
                 f"Reason: {session.error or 'no media frames were received'}",
             )
+
+        for boundary, action in list(session.part_actions.items()):
+            if action == "capacity":
+                await deliver_window(session, boundary, action)
+        await deliver_window(session, None, "final")
+
+        if session.status == "completed":
+            session.delivery_complete = True
+            if session._progress_task and not session._progress_task.done():
+                session._progress_task.cancel()
+                await asyncio.gather(session._progress_task, return_exceptions=True)
             stream_recorder.mark_delivered(session)
-            return
-
-        pending = [
-            path for path in session.output_files
-            if path not in session.uploaded_parts and os.path.exists(path)
-        ]
-        if not pending:
-            stream_recorder.mark_delivered(session)
-            await send_message(
-                session.user_id,
-                f"Recording of {session.channel_title} complete — all segments "
-                "were already uploaded.",
-            )
-            return
-
-        already = len(session.uploaded_parts)
-        total = already + len(pending)
-        await send_message(
-            session.user_id,
-            f"Recording finalized: {session.channel_title}\n"
-            f"Duration: {session.get_duration_str()}\n"
-            f"Uploading {len(pending)} remaining file(s) "
-            f"({already} already sent)...",
-        )
-        for offset, file_path in enumerate(pending, 1):
-            await upload_part(
-                session, file_path, index=already + offset, total=total
-            )
-
-        stream_recorder.mark_delivered(session)
+            if session.progress_message_id:
+                await edit_message_text(session.user_id, session.progress_message_id, progress_text(session))
         await send_message(
             session.user_id,
             f"✅ Recording upload completed.\n{session.stats_line()}",
@@ -1112,7 +1360,7 @@ async def stop_recording_background(user_id: int) -> None:
 
 
 async def restore_user_clients() -> None:
-    sessions = db.get_all_sessions()
+    sessions = await asyncio.to_thread(db.get_all_sessions)
     if not sessions:
         return
     semaphore = asyncio.Semaphore(3)
@@ -1159,6 +1407,7 @@ async def handle_login_qr(chat_id: int, user_id: int):
     if await get_user_client(user_id):
         await send_message(chat_id, "✅ Already logged in. Use /logout to switch.")
         return
+    await clear_pending_login(user_id)
     await send_message(chat_id, "🔄 Generating QR login...")
     try:
         image, expires = await generate_qr_login(user_id)
@@ -1176,11 +1425,15 @@ async def handle_login_phone(chat_id: int, user_id: int):
     if await get_user_client(user_id):
         await send_message(chat_id, "✅ Already logged in. Use /logout to switch.")
         return
+    await clear_pending_login(user_id)
     user_states[user_id] = UserState.WAITING_PHONE
     await send_message(chat_id, "📱 Send phone number, e.g. +998901234567")
 
 
 async def handle_login_session(chat_id: int, user_id: int, text: str):
+    if await get_user_client(user_id):
+        await send_message(chat_id, "Already logged in. Use /logout to switch accounts.")
+        return
     args = text.split(maxsplit=1)
     if len(args) < 2 or len(args[1].strip()) < 50:
         await send_message(chat_id, "Usage: /login\\_session <session\\_string>")
@@ -1191,7 +1444,9 @@ async def handle_login_session(chat_id: int, user_id: int, text: str):
             api_id=API_ID, api_hash=API_HASH,
             session_string=args[1].strip(), in_memory=True,
         )
-        await client.start()
+        if not await client.connect():
+            await client.disconnect()
+            raise RuntimeError("This session is no longer authorized")
         await activate_user_client(user_id, client)
         await save_user_session(user_id, client)
         me = await client.get_me()
@@ -1223,22 +1478,19 @@ async def handle_target(chat_id: int, user_id: int, text: str):
 
 async def get_channel_call(client: Client, chat) -> Any:
     """Return an active InputGroupCall; scheduled calls remain waiting."""
-    try:
-        full = getattr(chat, "full_info", None)
-        if full is None or hasattr(full, "__await__"):
-            full = await chat.full_info if hasattr(chat, "full_info") else None
-        call = getattr(full, "call", None) if full else None
-        if call is None:
-            return None
-        result = await client.invoke(
-            raw.functions.phone.GetGroupCall(call=call, limit=1)
-        )
-        if getattr(result.call, "schedule_date", None):
-            return None
-        return call
-    except Exception as exc:
-        logger.debug("Could not inspect group call: %s", exc)
-        return locals().get("call")
+    if hasattr(chat, "_recorder_call"):
+        call = chat._recorder_call
+    else:
+        resolved = await resolve_chat(client, chat.id)
+        if not hasattr(resolved, "_recorder_call"):
+            raise ValueError("Livestream targets must be groups or channels")
+        call = resolved._recorder_call
+    if call is None:
+        return None
+    result = await client.invoke(raw.functions.phone.GetGroupCall(call=call, limit=1))
+    if isinstance(result.call, raw.types.GroupCallDiscarded) or getattr(result.call, "schedule_date", None):
+        return None
+    return call
 
 
 async def start_waiting_for_stream(
@@ -1247,12 +1499,15 @@ async def start_waiting_for_stream(
     """Waiting mode: primary trigger is the VIDEO_CHAT_STARTED service
     message (event-driven); a slow probe is only a safety net in case the
     userbot misses the service update while reconnecting."""
+    if stream_recorder.is_recording(user_id) or user_id in waiting_sessions:
+        return
     waiting_sessions[user_id] = {
         "channel_id": channel_id,
         "title": title,
         "chat_id": chat_id,
         "task": None,
     }
+    await asyncio.to_thread(db.save_waiting, user_id, channel_id, title)
     await send_message(
         chat_id,
         f"⏳ Waiting mode armed for *{title}*.\n"
@@ -1265,25 +1520,22 @@ async def start_waiting_for_stream(
 
 
 async def wait_probe_loop(user_id: int, channel_id: int) -> None:
-    from datetime import datetime, timedelta
-
-    deadline = datetime.now() + timedelta(days=7)
-    while datetime.now() < deadline:
-        await asyncio.sleep(WAIT_PROBE_INTERVAL)
+    while True:
         waiting = waiting_sessions.get(user_id)
         if not waiting or waiting["channel_id"] != channel_id:
             return
         if stream_recorder.is_recording(user_id):
             waiting_sessions.pop(user_id, None)
+            await asyncio.to_thread(db.delete_waiting, user_id)
             return
         client = await get_user_client(user_id)
         if not client:
+            await asyncio.sleep(WAIT_PROBE_INTERVAL)
             continue
         try:
             chat = await resolve_chat(client, channel_id)
             call = await get_channel_call(client, chat)
             if call is not None:
-                waiting_sessions.pop(user_id, None)
                 await send_message(
                     user_id,
                     f"Live stream detected in {waiting['title']} "
@@ -1296,10 +1548,15 @@ async def wait_probe_loop(user_id: int, channel_id: int) -> None:
                     channel_id=channel_id,
                     channel_title=waiting["title"],
                     automatic=False,
+                    known_call=call,
                 )
+                if waiting_sessions.get(user_id) is waiting:
+                    waiting_sessions.pop(user_id, None)
+                    await asyncio.to_thread(db.delete_waiting, user_id)
                 return
         except Exception as exc:
             logger.debug("Wait probe failed for %s: %s", channel_id, exc)
+        await asyncio.sleep(WAIT_PROBE_INTERVAL)
 
 
 def wait_question_keyboard(channel_id: int) -> str:
@@ -1316,6 +1573,46 @@ def wait_question_keyboard(channel_id: int) -> str:
 
 
 async def handle_record(chat_id: int, user_id: int, text: str):
+    pending = record_requests.get(user_id)
+    if pending and not pending.done():
+        await send_message(chat_id, "Yozishni boshlash so‘rovi bajarilmoqda. Qayta /record yuborish shart emas. Bekor qilish: /stop")
+        return
+    record_requests[user_id] = track_background_task(asyncio.create_task(
+        _record_with_retry(chat_id, user_id, text)
+    ))
+
+
+async def _record_with_retry(chat_id: int, user_id: int, text: str) -> None:
+    try:
+        for attempt in range(3):
+            try:
+                await _handle_record_once(chat_id, user_id, text)
+                return
+            except FloodWait as exc:
+                seconds = max(1, _flood_seconds(exc))
+                if attempt == 2:
+                    await send_message(chat_id, f"Telegram cheklovi davom etmoqda. {seconds} soniyadan keyin /record orqali qayta urinishingiz mumkin.")
+                    return
+                await send_message(chat_id, f"⏳ Telegram {seconds} soniya kutishni talab qildi. "
+                                   "Kutib, yozishni avtomatik boshlashga qayta urinaman. Bekor qilish: /stop")
+                await asyncio.sleep(seconds + 1)
+    except asyncio.CancelledError:
+        raise
+    except Exception as exc:
+        logger.exception("Recording request failed: user=%s", user_id)
+        await send_message(chat_id, f"Could not start recording: {exc}")
+    finally:
+        if record_requests.get(user_id) is asyncio.current_task():
+            record_requests.pop(user_id, None)
+
+
+async def _handle_record_once(chat_id: int, user_id: int, text: str):
+    if stream_recorder.is_recording(user_id):
+        await send_message(chat_id, "⚠️ Already recording. Use /stop first.")
+        return
+    if user_id in waiting_sessions:
+        await send_message(chat_id, "⚠️ Already waiting for a livestream. Use /stop to cancel.")
+        return
     client = await get_user_client(user_id)
     if not client:
         await send_message(chat_id, "⚠️ Not logged in. Use /login\\_qr or /login\\_phone.")
@@ -1330,33 +1627,29 @@ async def handle_record(chat_id: int, user_id: int, text: str):
                 or getattr(chat, "first_name", None)
                 or str(chat.id),
             }
+        except FloodWait:
+            raise
         except Exception as exc:
             await send_message(chat_id, f"Could not resolve that channel: {exc}")
             return
     else:
         target = db.get_target(user_id)
+        chat = SimpleNamespace(id=target["id"]) if target else None
     if not target:
         await send_message(chat_id, "⚠️ Set a target first with /target <channel>.")
         return
-    if stream_recorder.is_recording(user_id):
-        await send_message(chat_id, "⚠️ Already recording. Use /stop first.")
-        return
-    if waiting_sessions.get(user_id):
-        await send_message(
-            chat_id, "⚠️ Already waiting for a livestream. Use /stop to cancel."
-        )
-        return
-
     channel_id = int(target["id"])
     title = target.get("title") or str(channel_id)
 
     # Is there an active or scheduled group call right now?
     live_call = None
     try:
-        chat = await resolve_chat(client, channel_id)
         live_call = await get_channel_call(client, chat)
+    except FloodWait:
+        raise
     except Exception as exc:
-        logger.debug("get_chat in handle_record failed: %s", exc)
+        await send_message(chat_id, f"Could not check the livestream: {exc}")
+        return
 
     if live_call is None:
         pending: Dict[int, Dict[str, Any]] = getattr(
@@ -1382,13 +1675,10 @@ async def handle_record(chat_id: int, user_id: int, text: str):
             client=client,
             channel_id=channel_id,
             channel_title=title,
+            known_call=live_call,
         )
-    except FloodWait as exc:
-        await send_message(
-            chat_id,
-            f"⏳ Telegram rate limit — try again in {_flood_seconds(exc)}s. "
-            "Add a pool account with /addaccount for automatic failover.",
-        )
+    except FloodWait:
+        raise
     except Exception as exc:
         logger.exception("Manual recording start failed for user %s", user_id)
         await send_message(chat_id, f"Could not start recording: {exc}")
@@ -1400,9 +1690,28 @@ async def handle_record(chat_id: int, user_id: int, text: str):
     )
 
 
+async def handle_send(chat_id: int, user_id: int) -> None:
+    if not stream_recorder.is_recording(user_id):
+        await send_message(chat_id, "Faol yozuv yo‘q. Avval /record orqali boshlang.")
+        return
+    if not await stream_recorder.send_current_part(user_id):
+        await send_message(chat_id, "Yuborish uchun hali yetarli yozuv yo‘q yoki yozuv tugatilmoqda.")
+        return
+    await send_message(chat_id, "📤 Hozirgacha yozilgan qism tayyorlanib yuboriladi. "
+                       "Yozuv davom etmoqda. ~1.97 GB dan kichik yozuv yakunda /send nusxasi bilan birlashtiriladi.")
+
+
 async def handle_stop(chat_id: int, user_id: int):
+    request = record_requests.pop(user_id, None)
+    if request and not request.done():
+        request.cancel()
+        await asyncio.gather(request, return_exceptions=True)
+        if not stream_recorder.is_recording(user_id) and user_id not in waiting_sessions:
+            await send_message(chat_id, "Yozishni boshlash so‘rovi bekor qilindi.")
+            return
     waiting = waiting_sessions.pop(user_id, None)
     if waiting:
+        await asyncio.to_thread(db.delete_waiting, user_id)
         if waiting.get("task"):
             waiting["task"].cancel()
         await send_message(chat_id, "🚫 Waiting mode cancelled.")
@@ -1410,11 +1719,11 @@ async def handle_stop(chat_id: int, user_id: int):
     if not stream_recorder.is_recording(user_id):
         await send_message(chat_id, "No active recording session.")
         return
+    track_background_task(asyncio.create_task(stop_recording_background(user_id)))
     await send_message(
         chat_id,
         "Stopping the recording. FFmpeg will finalize it and upload the result here.",
     )
-    track_background_task(asyncio.create_task(stop_recording_background(user_id)))
 
 
 async def handle_status(chat_id: int, user_id: int):
@@ -1422,13 +1731,14 @@ async def handle_status(chat_id: int, user_id: int):
     target = db.get_target(user_id)
     rec = stream_recorder.get_session(user_id)
     waiting = waiting_sessions.get(user_id)
-    accounts = await asyncio.to_thread(db.list_accounts)
+    accounts = await asyncio.to_thread(db.list_accounts, user_id)
     lines = [
         "*Status*",
         f"- Logged in: {'yes' if logged else 'no'}",
         f"- State: {user_states.get(user_id, UserState.IDLE)}",
         f"- Target: {(target.get('title') or target.get('id')) if target else 'not set'}",
         f"- Waiting for stream: {waiting['title'] if waiting else 'no'}",
+        f"- Recording request pending: {'yes' if user_id in record_requests else 'no'}",
         f"- Backend: {getattr(stream_recorder, 'backend_name', 'unknown')}",
         f"- Media capture: {'enabled' if getattr(stream_recorder, 'captures_media', False) else 'disabled'}",
         f"- Recording: {('active - ' + rec.get_duration_str()) if rec else 'no'}",
@@ -1440,16 +1750,22 @@ async def handle_status(chat_id: int, user_id: int):
 
 
 async def handle_logout(chat_id: int, user_id: int):
-    if stream_recorder.is_recording(user_id):
+    if stream_recorder.is_recording(user_id) or user_id in record_requests:
         await send_message(chat_id, "Stop the active recording with /stop before logout.")
         return
+    waiting = waiting_sessions.pop(user_id, None)
+    if waiting and waiting.get("task"):
+        waiting["task"].cancel()
+    await asyncio.to_thread(db.delete_waiting, user_id)
     client = user_clients.pop(user_id, None)
     if client:
         try:
             await client.stop()
         except Exception:
             pass
-    db.delete_session(user_id)
+    if not await asyncio.to_thread(db.delete_session, user_id):
+        await send_message(chat_id, "Sessiyani saqlash joyidan o‘chirib bo‘lmadi. Mongo ulanishini tekshirib /logout ni qayta yuboring.")
+        return
     user_client_handlers.pop(user_id, None)
     user_states[user_id] = UserState.IDLE
     await send_message(chat_id, "👋 Logged out.")
@@ -1459,18 +1775,48 @@ async def handle_text(chat_id: int, user_id: int, text: str):
     state = user_states.get(user_id, UserState.IDLE)
 
     if state == UserState.WAITING_PHONE:
-        client = Client(f"user_{user_id}", api_id=API_ID, api_hash=API_HASH, in_memory=True)
-        await client.connect()
+        await clear_pending_login(user_id)
+        user_states[user_id] = UserState.WAITING_PHONE
+        client = Client(f"user_{user_id}", api_id=API_ID, api_hash=API_HASH, in_memory=True,
+                        sleep_threshold=0)
+        user_clients[user_id] = client
         try:
-            sent = await client.send_code(text.strip())
-            user_clients[user_id] = client
-            user_login_data[user_id] = {"phone": text.strip(), "phone_code_hash": sent.phone_code_hash}
-            user_states[user_id] = UserState.WAITING_CODE
-            await send_message(chat_id, "📨 Code sent. Send the login code here.")
+            await client.connect()
+            user_login_data[user_id] = {"phone": text.strip().lstrip("+")}
+            sent = await send_code_raw(client, user_login_data[user_id]["phone"])
+            await accept_sent_code(user_id, chat_id, sent)
+        except SessionPasswordNeeded:
+            user_states[user_id] = UserState.WAITING_PASSWORD
+            await send_message(chat_id, "Enter your 2FA password.")
         except Exception as exc:
-            await client.disconnect()
-            user_states[user_id] = UserState.IDLE
+            await clear_pending_login(user_id)
             await send_message(chat_id, f"❌ Could not send code: {exc}")
+        return
+
+    if state in (UserState.WAITING_EMAIL, UserState.WAITING_EMAIL_CODE):
+        client = user_clients.get(user_id)
+        data = user_login_data.get(user_id)
+        if not client or not data:
+            user_states[user_id] = UserState.IDLE
+            await send_message(chat_id, "Login expired. Use /login_phone again.")
+            return
+        purpose = raw.types.EmailVerifyPurposeLoginSetup(
+            phone_number=data["phone"], phone_code_hash=data["phone_code_hash"]
+        )
+        try:
+            if state == UserState.WAITING_EMAIL:
+                result = await client.invoke(raw.functions.account.SendVerifyEmailCode(
+                    purpose=purpose, email=text.strip()
+                ))
+                user_states[user_id] = UserState.WAITING_EMAIL_CODE
+                await send_message(chat_id, f"Enter the confirmation code sent to {result.email_pattern}.")
+            else:
+                result = await client.invoke(raw.functions.account.VerifyEmail(
+                    purpose=purpose, verification=raw.types.EmailVerificationCode(code=text.strip())
+                ))
+                await accept_sent_code(user_id, chat_id, result.sent_code)
+        except Exception as exc:
+            await send_message(chat_id, f"Email verification failed: {exc}")
         return
 
     if state == UserState.WAITING_CODE:
@@ -1481,7 +1827,24 @@ async def handle_text(chat_id: int, user_id: int, text: str):
             await send_message(chat_id, "⚠️ Session expired. Try /login\\_phone again.")
             return
         try:
-            await client.sign_in(data["phone"], data["phone_code_hash"], text.replace(" ", "").replace("-", ""))
+            code = "".join(text.split()).replace("-", "").replace(".", "")
+            if not code.isascii() or not code.isdigit():
+                await send_message(chat_id, "Kod raqamlarini bo‘sh joy bilan ajratib yuboring. Masalan: `1 2 3 4 5`.")
+                return
+            data["code_attempts"] = data.get("code_attempts", 0) + 1
+            if data.get("email_login"):
+                result = await client.invoke(raw.functions.auth.SignIn(
+                    phone_number=data["phone"], phone_code_hash=data["phone_code_hash"],
+                    email_verification=raw.types.EmailVerificationCode(code=code),
+                ))
+                await store_authorization(client, result)
+            else:
+                result = await client.sign_in(
+                    phone_number=data["phone"], phone_code_hash=data["phone_code_hash"],
+                    phone_code=code,
+                )
+                if not getattr(result, "id", None):
+                    raise RuntimeError("Avval rasmiy Telegram ilovasida ro‘yxatdan o‘ting")
             await activate_user_client(user_id, client)
             await save_user_session(user_id, client)
             user_login_data.pop(user_id, None)
@@ -1489,11 +1852,19 @@ async def handle_text(chat_id: int, user_id: int, text: str):
         except SessionPasswordNeeded:
             user_states[user_id] = UserState.WAITING_PASSWORD
             await send_message(chat_id, "🔐 2FA password required. Send your password.")
-        except (PhoneCodeExpired, PhoneCodeInvalid) as exc:
-            user_states[user_id] = UserState.IDLE
-            await send_message(chat_id, f"❌ Invalid or expired code: {exc}")
+        except PhoneCodeInvalid:
+            remaining = 3 - data["code_attempts"]
+            if remaining <= 0:
+                await clear_pending_login(user_id)
+                await send_message(chat_id, "Kod 3 marta noto‘g‘ri kiritildi. Qayta boshlash: /login")
+            else:
+                await send_message(chat_id, f"Kod noto‘g‘ri. Qayta yuboring. Qolgan urinishlar: {remaining}.")
+        except PhoneCodeExpired:
+            await clear_pending_login(user_id)
+            await send_message(chat_id, "Kod muddati tugagan yoki Telegram uni bekor qilgan. "
+                               "Qayta boshlash: /login. QR orqali kirish: /login\\_qr")
         except Exception as exc:
-            user_states[user_id] = UserState.IDLE
+            await clear_pending_login(user_id)
             await send_message(chat_id, f"❌ Login error: {exc}")
         return
 
@@ -1504,13 +1875,23 @@ async def handle_text(chat_id: int, user_id: int, text: str):
             await send_message(chat_id, "⚠️ Session expired. Try /login\\_phone again.")
             return
         try:
+            data = user_login_data.setdefault(user_id, {})
+            data["password_attempts"] = data.get("password_attempts", 0) + 1
             await client.check_password(text)
             await activate_user_client(user_id, client)
             await save_user_session(user_id, client)
             user_login_data.pop(user_id, None)
             await send_message(chat_id, "✅ Login successful. Use /target <channel>.")
+        except PasswordHashInvalid:
+            remaining = 3 - data["password_attempts"]
+            if remaining <= 0:
+                await clear_pending_login(user_id)
+                await send_message(chat_id, "Parol 3 marta noto‘g‘ri kiritildi. Qayta boshlash: /login")
+            else:
+                await send_message(chat_id, f"2FA paroli noto‘g‘ri. Qolgan urinishlar: {remaining}.")
         except Exception as exc:
-            await send_message(chat_id, f"❌ Wrong password: {exc}")
+            await clear_pending_login(user_id)
+            await send_message(chat_id, f"❌ Login error: {exc}")
         return
 
     await send_message(chat_id, "Use /help for commands.")
@@ -1527,6 +1908,7 @@ async def handle_callback_query(callback: Dict[str, Any]) -> None:
 
     if user_id and data.startswith("wait:"):
         if data == "wait:no":
+            getattr(handle_callback_query, "_pending", {}).pop(user_id, None)
             await answer_callback_query(query_id, "Cancelled.")
             await edit_message_text(
                 chat_id, callback["message"]["message_id"],
@@ -1556,7 +1938,7 @@ async def handle_callback_query(callback: Dict[str, Any]) -> None:
 # ── Account pool commands ────────────────────────────────────────────────────
 
 async def handle_accounts(chat_id: int, user_id: int):
-    accounts = await asyncio.to_thread(db.list_accounts)
+    accounts = await asyncio.to_thread(db.list_accounts, user_id)
     if not accounts:
         await send_message(
             chat_id,
@@ -1583,7 +1965,7 @@ async def handle_addaccount(chat_id: int, user_id: int, text: str):
         return
     session_string = args[1].strip()
     label = args[2].strip() if len(args) > 2 else None
-    account_id = await asyncio.to_thread(db.add_account, session_string, label)
+    account_id = await asyncio.to_thread(db.add_account, session_string, label, user_id)
     if account_id is None:
         await send_message(chat_id, "❌ Could not save the account.")
         return
@@ -1601,7 +1983,8 @@ async def handle_addaccount(chat_id: int, user_id: int, text: str):
             f"(`{me.id}`). It will be used for failover and load balancing.",
         )
     finally:
-        await account_manager.stop_client(account_id)
+        if not db.get_account_active(account_id):
+            await account_manager.stop_client(account_id)
 
 
 async def handle_delaccount(chat_id: int, user_id: int, text: str):
@@ -1610,6 +1993,13 @@ async def handle_delaccount(chat_id: int, user_id: int, text: str):
         await send_message(chat_id, "Usage: /delaccount <account_id>")
         return
     account_id = int(args[1].strip().lstrip("#"))
+    owned = await asyncio.to_thread(db.list_accounts, user_id)
+    if account_id not in {row["account_id"] for row in owned}:
+        await send_message(chat_id, "No such account in your pool.")
+        return
+    if db.get_account_active(account_id):
+        await send_message(chat_id, "Stop recordings using this account before removing it.")
+        return
     await account_manager.stop_client(account_id)
     ok = await asyncio.to_thread(db.delete_account, account_id)
     await send_message(
@@ -1634,7 +2024,11 @@ async def handle_update(update: Dict[str, Any]):
     from_user = message.get("from", {})
     chat_id = int(chat["id"])
     user_id = int(from_user.get("id") or chat_id)
-    text = (message.get("text") or "").strip()
+    if chat.get("type") != "private" or chat_id != user_id:
+        return
+    text = message.get("text") or ""
+    if user_states.get(user_id) != UserState.WAITING_PASSWORD:
+        text = text.strip()
 
     if not text:
         return
@@ -1655,10 +2049,14 @@ async def handle_update(update: Dict[str, Any]):
             await handle_login_phone(chat_id, user_id)
         elif text.startswith("/login_session"):
             await handle_login_session(chat_id, user_id, text)
+        elif text.split(maxsplit=1)[0].split("@", 1)[0] == "/login":
+            await handle_login_phone(chat_id, user_id)
         elif text.startswith("/target"):
             await handle_target(chat_id, user_id, text)
         elif text.startswith("/record"):
             await handle_record(chat_id, user_id, text)
+        elif text.split(maxsplit=1)[0].split("@", 1)[0] == "/send":
+            await handle_send(chat_id, user_id)
         elif text.startswith("/stop"):
             await handle_stop(chat_id, user_id)
         elif text.startswith("/status"):
@@ -1672,8 +2070,7 @@ async def handle_update(update: Dict[str, Any]):
         elif text.startswith("/logout"):
             await handle_logout(chat_id, user_id)
         elif text.startswith("/cancel"):
-            user_states[user_id] = UserState.IDLE
-            user_login_data.pop(user_id, None)
+            await clear_pending_login(user_id)
             pending = getattr(handle_callback_query, "_pending", None)
             if pending:
                 pending.pop(user_id, None)
@@ -1705,6 +2102,9 @@ async def shutdown_clients():
 
 async def main():
     global _shutdown_event
+
+    if not API_ID or not API_HASH or not BOT_TOKEN:
+        raise RuntimeError("Fill API_ID, API_HASH and BOT_TOKEN in the repository's .env file")
 
     if not acquire_single_instance_lock():
         print("[ERROR] Another bot.py instance is already running. Stop it first.", flush=True)
@@ -1751,6 +2151,9 @@ async def main():
     stream_recorder.set_part_callback(on_part_ready)
     stream_recorder.set_recovery_callback(recover_recording_account)
     await restore_user_clients()
+    for waiting in await asyncio.to_thread(db.list_waiting):
+        uid = int(waiting["user_id"])
+        await start_waiting_for_stream(uid, uid, int(waiting["channel_id"]), waiting["title"])
     track_background_task(asyncio.create_task(stream_recorder.recover_incomplete()))
     print(f"[OK] Bot API polling as @{BOT_USERNAME}", flush=True)
     print(f"[INFO] Send /start to @{BOT_USERNAME}", flush=True)
@@ -1787,6 +2190,10 @@ async def main():
 
     # Clean shutdown
     print("[SHUTDOWN] Finalizing active recordings...", flush=True)
+    pending_records = list(record_requests.values())
+    for task in pending_records:
+        task.cancel()
+    await asyncio.gather(*pending_records, return_exceptions=True)
     for uid in list(waiting_sessions):
         waiting = waiting_sessions.pop(uid, None)
         if waiting and waiting.get("task"):

@@ -12,6 +12,8 @@ import logging
 import os
 import tempfile
 from typing import Any, Dict, Optional
+from pyrogram import enums
+from .metadata import media_kind
 
 logger = logging.getLogger(__name__)
 
@@ -41,7 +43,7 @@ class MtprotoUploader:
             return None
 
     @staticmethod
-    def _progress_logger():
+    def _progress_logger(info: Dict[str, Any]):
         last_percent = -10
 
         def log_progress(current: int, total: int) -> None:
@@ -51,7 +53,8 @@ class MtprotoUploader:
                 return
             last_percent = percent
             logger.info(
-                "MTProto upload: %d/%d MB (%d%%)",
+                "MTProto upload chat=%s stream=%s: %d/%d MB (%d%%)",
+                info.get("chat_id"), info.get("stream_id"),
                 current // 1048576,
                 max(total, 1) // 1048576,
                 percent,
@@ -75,17 +78,24 @@ class MtprotoUploader:
         if not bot_username:
             raise RuntimeError("bot username unknown (not started?)")
         peer = await self._resolve_peer(client, bot_username)
-        ext = os.path.splitext(file_path)[1].lower()
+        kind = media_kind(file_path, info)
         thumb_path = self._write_thumb(info.get("thumb"))
         title = os.path.splitext(os.path.basename(file_path))[0]
         duration = int(info.get("duration") or 0)
-        progress = self._progress_logger()
+        progress = self._progress_logger(info)
         try:
-            if info.get("has_video") and ext == ".mp4":
-                await client.send_video(
+            if kind == "video_note":
+                result = await client.send_video_note(
+                    peer.id, video_note=file_path, duration=duration,
+                    length=int(info.get("width") or 1), thumb=thumb_path,
+                    progress=progress,
+                )
+            elif kind == "video":
+                result = await client.send_video(
                     peer.id,
                     video=file_path,
                     caption=caption,
+                    parse_mode=enums.ParseMode.DISABLED,
                     duration=duration,
                     width=int(info.get("width") or 0),
                     height=int(info.get("height") or 0),
@@ -93,34 +103,34 @@ class MtprotoUploader:
                     supports_streaming=True,
                     progress=progress,
                 )
-                return True
-            if ext in (".ogg", ".opus", ".oga"):
-                await client.send_voice(
+            elif kind == "voice":
+                result = await client.send_voice(
                     peer.id,
                     voice=file_path,
                     caption=caption,
+                    parse_mode=enums.ParseMode.DISABLED,
                     duration=duration,
                     progress=progress,
                 )
-                return True
-            if not info.get("has_video"):
-                await client.send_audio(
+            elif kind == "audio":
+                result = await client.send_audio(
                     peer.id,
                     audio=file_path,
                     caption=caption,
+                    parse_mode=enums.ParseMode.DISABLED,
                     duration=duration,
-                    performer=channel_title or "Telegram Live",
-                    title=title,
+                    performer=info.get("performer") or channel_title or "Telegram Live",
+                    title=info.get("title") or title,
                     thumb=thumb_path,
                     progress=progress,
                 )
-                return True
-            await client.send_document(
-                peer.id,
-                document=file_path,
-                caption=caption,
-                progress=progress,
-            )
+            else:
+                result = await client.send_document(
+                    peer.id, document=file_path, caption=caption,
+                    parse_mode=enums.ParseMode.DISABLED, progress=progress,
+                )
+            if result is None:
+                raise RuntimeError("Telegram did not confirm media delivery")
             return True
         finally:
             if thumb_path:

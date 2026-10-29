@@ -30,9 +30,11 @@ import queue
 import subprocess
 import threading
 import time
+import re
+from fractions import Fraction
 from typing import Callable, Dict, List, Optional
 
-from ffmpeg_helper import get_ffmpeg_path, get_ffprobe_path
+from ffmpeg_helper import get_ffmpeg_path, get_ffprobe_path, write_all
 from config import (
     AUDIO_BITRATE,
     AUDIO_CHANNELS,
@@ -63,7 +65,7 @@ def valid_media(path: str) -> bool:
             capture_output=True, text=True, timeout=30,
             creationflags=_CREATIONFLAGS,
         )
-        return bool(result.stdout.strip())
+        return result.returncode == 0 and bool(result.stdout.strip())
     except Exception:
         return False
 
@@ -118,7 +120,7 @@ def _reap(process: Optional[subprocess.Popen], timeout: float = 20.0) -> None:
         and not process.stdin.closed
     ):
         time.sleep(0.05)
-    if process.poll() is None:
+    if process.poll() is None and process.stdin is not None and not process.stdin.closed:
         logger.warning("Encoder did not finish within 30s; closing stdin")
         _close_stdin(process)
     try:
@@ -165,7 +167,7 @@ class MuxerManager:
 
         # video writer thread
         self._write_queue: "queue.Queue" = queue.Queue(
-            maxsize=int(getattr(_config, "VIDEO_QUEUE_FRAMES", 60))
+            maxsize=max(1, int(getattr(_config, "VIDEO_QUEUE_FRAMES", 12)))
         )
         self._writer_thread: Optional[threading.Thread] = None
         self._async_write_lock = asyncio.Lock()
@@ -182,6 +184,7 @@ class MuxerManager:
         self._lock = threading.RLock()
         self.closed = False
         self._finalizing = False
+        self.finalization_errors: List[int] = []
 
     # ── Callbacks ─────────────────────────────────────────────────────────
 
@@ -197,14 +200,15 @@ class MuxerManager:
 
     def _popen(self, command: List[str], log_path: str) -> subprocess.Popen:
         log_handle = open(log_path, "ab", buffering=0)
-        process = subprocess.Popen(
-            command,
-            stdin=subprocess.PIPE,
-            stdout=subprocess.DEVNULL,
-            stderr=log_handle,
-            bufsize=0,
-            creationflags=_CREATIONFLAGS,
-        )
+        try:
+            process = subprocess.Popen(
+                command, stdin=subprocess.PIPE, stdout=subprocess.DEVNULL,
+                stderr=log_handle, bufsize=0, creationflags=_CREATIONFLAGS,
+            )
+        except BaseException:
+            log_handle.close()
+            raise
+        process._recorder_log = log_handle
         self._stderr_handles.append(log_handle)
         return process
 
@@ -288,7 +292,7 @@ class MuxerManager:
                 rot = rotation
                 fps = fps or VIDEO_FPS
 
-            fps = max(5.0, min(float(fps), 60.0))
+            fps = max(1.0, min(float(fps), 120.0))
             self.encoder_fps = fps
 
             segment_path = os.path.join(
@@ -337,6 +341,8 @@ class MuxerManager:
             self.video_segments.append(segment_path)
             self.video_writer_dead = False
             self._ensure_writer()
+            # Retire old encoders even if this source never delivers a frame.
+            self._write_queue.put((generation, None))
             return generation
 
     def _ensure_writer(self) -> None:
@@ -363,10 +369,14 @@ class MuxerManager:
                 self.video_frames_dropped += 1
                 continue
             # newer generation observed -> older generations fully drained
-            for gen in [g for g in self._process_by_gen if g < generation]:
-                _close_stdin(self._process_by_gen.pop(gen))
+            for gen, old_process in list(self._process_by_gen.items()):
+                if gen < generation:
+                    _close_stdin(old_process)
+                    self._process_by_gen.pop(gen, None)
+            if frame is None:
+                continue
             try:
-                process.stdin.write(frame)
+                write_all(process.stdin, frame)
                 self.video_frames_written += 1
             except (BrokenPipeError, OSError, ValueError):
                 self.video_frames_dropped += 1
@@ -403,13 +413,15 @@ class MuxerManager:
             return await asyncio.to_thread(self.write_video_frame, generation, frame)
 
     def close_video_encoder(self) -> None:
+        thread = self._writer_thread
+        if thread and thread.is_alive():
+            self._write_queue.put(None, timeout=30)
+            thread.join(timeout=30)
+            if thread.is_alive():
+                raise TimeoutError("Video writer did not drain")
+            self._writer_thread = None
         with self._lock:
-            if self._writer_thread and self._writer_thread.is_alive():
-                self._write_queue.put(None)
-                self._writer_thread.join(timeout=15)
-                self._writer_thread = None
             self._current_era.video_closed = True
-            self._schedule_era_finalize(self._current_era)
 
     # ── Era rotation (rolling upload) ─────────────────────────────────────
 
@@ -444,7 +456,6 @@ class MuxerManager:
     def mark_audio_era_closed(self) -> None:
         with self._lock:
             self._current_era.audio_closed = True
-            self._schedule_era_finalize(self._current_era)
 
     def _schedule_era_finalize(self, era: _Era) -> None:
         if self._finalizing:
@@ -468,12 +479,15 @@ class MuxerManager:
                 break
             try:
                 part = self._finalize_era_sync(era)
+                if not part and (era.audio_parts or era.video_parts):
+                    self.finalization_errors.append(era.index)
                 if part and self._part_callback:
                     try:
                         self._part_callback(part)
                     except Exception:
                         logger.exception("Part callback failed for %s", part)
             except Exception:
+                self.finalization_errors.append(era.index)
                 logger.exception("Era %d finalization failed", era.index)
 
     # ── Era merge ─────────────────────────────────────────────────────────
@@ -497,24 +511,113 @@ class MuxerManager:
         ]
         if not video_parts and not audio_parts:
             return ""
+        if not video_parts:
+            output_path = os.path.splitext(output_path)[0] + ".m4a"
 
         merged = self._merge_av(
             video_parts, audio_parts, output_path, description=f"era{era.index}"
         )
-        if merged:
+        if merged and valid_media(merged):
             for path in video_parts + audio_parts:
                 try:
                     os.remove(path)
                 except OSError:
                     pass
-        return merged
+            for process in era.procs:
+                handle = getattr(process, "_recorder_log", None)
+                if handle:
+                    handle.close()
+            era.procs.clear()
+            self._stderr_handles[:] = [h for h in self._stderr_handles if not h.closed]
+            return merged
+        return ""
 
     def _concat_input(self, parts: List[str], tag: str) -> List[str]:
         list_path = os.path.join(self.output_dir, f"{self.stem}.{tag}.concat.txt")
         with open(list_path, "w", encoding="utf-8") as handle:
             for part in parts:
-                handle.write(f"file '{os.path.abspath(part)}'\n")
+                escaped = os.path.abspath(part).replace("\\", "/").replace("'", "'\\''")
+                handle.write(f"file '{escaped}'\n")
         return ["-f", "concat", "-safe", "0", "-i", list_path]
+
+    def combine_parts(self, parts: List[str], output_path: str) -> str:
+        """Join one delivery window. Compatible streams are copied unchanged."""
+        if not parts:
+            return ""
+        metadata = []
+        for path in parts:
+            result = subprocess.run(
+                [get_ffprobe_path(), "-v", "error", "-show_streams", "-show_format", "-of", "json", path],
+                capture_output=True, text=True, check=True, timeout=30, creationflags=_CREATIONFLAGS,
+            )
+            metadata.append(json.loads(result.stdout))
+        videos = [next((s for s in m["streams"] if s["codec_type"] == "video"), None) for m in metadata]
+        if not any(videos):
+            output_path = os.path.splitext(output_path)[0] + ".m4a"
+        temporary = os.path.splitext(output_path)[0] + ".assembling" + os.path.splitext(output_path)[1]
+        if len(parts) == 1:
+            if os.path.abspath(parts[0]) != os.path.abspath(output_path):
+                import shutil
+                try:
+                    os.link(parts[0], output_path)
+                except OSError:
+                    try:
+                        shutil.copyfile(parts[0], temporary)
+                        os.replace(temporary, output_path)
+                    finally:
+                        if os.path.exists(temporary):
+                            os.remove(temporary)
+            return output_path
+        signatures = [tuple((s.get("codec_type"), s.get("codec_name"), s.get("width"), s.get("height"),
+                             s.get("avg_frame_rate"), s.get("sample_rate"), s.get("channels"))
+                            for s in m["streams"]) for m in metadata]
+        normalized = []
+        inputs = parts
+        try:
+            if any(videos) and len(set(signatures)) > 1:
+                width = max(v["width"] for v in videos if v)
+                height = max(v["height"] for v in videos if v)
+                width += width % 2
+                height += height % 2
+                rates = []
+                for video in videos:
+                    if video:
+                        try:
+                            rates.append(float(Fraction(video.get("avg_frame_rate") or "0")))
+                        except (ValueError, ZeroDivisionError):
+                            pass
+                fps = max(rates, default=0) or VIDEO_FPS
+                for index, (path, data, video) in enumerate(zip(parts, metadata, videos)):
+                    target = output_path + f".normalize{index}.mp4"
+                    normalized.append(target)
+                    command = [get_ffmpeg_path(), "-y", "-v", "warning", "-i", path]
+                    has_audio = any(s["codec_type"] == "audio" for s in data["streams"])
+                    video_input, audio_input = 0, 0
+                    if video is None:
+                        command += ["-f", "lavfi", "-i", f"color=c=black:s={width}x{height}:r={fps}"]
+                        video_input = 1
+                    if not has_audio:
+                        audio_input = 2 if video is None else 1
+                        command += ["-f", "lavfi", "-i", f"anullsrc=r={AUDIO_SAMPLE_RATE}:cl={'stereo' if AUDIO_CHANNELS == 2 else 'mono'}"]
+                    duration = float(data["format"]["duration"])
+                    command += ["-map", f"{video_input}:v:0", "-map", f"{audio_input}:a:0",
+                                "-vf", f"scale={width}:{height}:force_original_aspect_ratio=decrease,pad={width}:{height}:(ow-iw)/2:(oh-ih)/2,setsar=1,tpad=stop_mode=clone:stop_duration={duration}",
+                                "-t", str(duration), "-r", str(fps), "-c:v", "libx264", "-preset", VIDEO_PRESET,
+                                "-crf", VIDEO_CRF, "-pix_fmt", "yuv420p", "-c:a", "copy" if has_audio else "aac", target]
+                    if not self._run_ffmpeg(command, "normalize delivery part"):
+                        raise RuntimeError("Cannot normalize changing stream formats")
+                inputs = normalized
+            command = [get_ffmpeg_path(), "-y", "-v", "warning"]
+            command += self._concat_input(inputs, os.path.basename(output_path) + ".delivery")
+            command += ["-map", "0", "-c", "copy", "-movflags", "+faststart", temporary]
+            if not self._run_ffmpeg(command, "combine delivery") or not valid_media(temporary):
+                raise RuntimeError("Could not combine recording parts")
+            os.replace(temporary, output_path)
+            return output_path
+        finally:
+            for path in normalized + [temporary]:
+                if os.path.exists(path):
+                    os.remove(path)
 
     def _merge_av(
         self,
@@ -601,20 +704,45 @@ class MuxerManager:
         if era.index == 0 and not era.scheduled:
             return self._finalize_era_sync(era, final_output_path)
 
-        # multi-era: last era merges as a part via the finalizer thread
-        era.audio_closed = era.video_closed = True
-        self._finalize_queue.put(era)
+        # Queue each era once; close_all may have been called by a caller.
+        if not era.scheduled:
+            era.scheduled = True
+            self._finalize_queue.put(era)
         self._ensure_finalizer()
         if self._finalizer_thread and self._finalizer_thread.is_alive():
             self._finalize_queue.put(None)
             self._finalizer_thread.join(timeout=1800)
+            if self._finalizer_thread.is_alive():
+                raise TimeoutError("Segment finalizer did not finish")
+        if self.finalization_errors:
+            raise RuntimeError(f"Segments failed to finalize: {self.finalization_errors}")
         return self._last_completed_part()
 
     def _last_completed_part(self) -> str:
         parts = sorted(
             glob.glob(os.path.join(self.output_dir, f"{self.stem}.part*.mp4"))
+            + glob.glob(os.path.join(self.output_dir, f"{self.stem}.part*.m4a"))
         )
         return parts[-1] if parts else ""
+
+    def recover_parts(self) -> List[str]:
+        """Salvage closed/crashed Matroska files without touching live encoders."""
+        eras = {}
+        for path in glob.glob(os.path.join(self.output_dir, f"{self.stem}.e*")):
+            match = re.fullmatch(re.escape(self.stem) + r"\.e(\d+)\.(audio.*\.mka|v\d+\.mkv)",
+                                 os.path.basename(path))
+            if not match:
+                continue
+            era = eras.setdefault(int(match[1]), _Era(int(match[1])))
+            (era.audio_parts if match[2].startswith("audio") else era.video_parts).append(path)
+        for era in sorted(eras.values(), key=lambda item: item.index):
+            era.audio_parts.sort(key=lambda p: (".r" in p, int(re.search(r"\.r(\d+)", p)[1]) if re.search(r"\.r(\d+)", p) else 0))
+            era.video_parts.sort(key=lambda p: int(re.search(r"\.v(\d+)\.mkv$", p)[1]))
+            output = os.path.join(self.output_dir, f"{self.stem}.part{era.index:03d}.mp4")
+            if not valid_media(output) and not valid_media(os.path.splitext(output)[0] + ".m4a"):
+                self._finalize_era_sync(era, output)
+        return sorted(glob.glob(os.path.join(self.output_dir, f"{self.stem}.part*.mp4"))
+                      + glob.glob(os.path.join(self.output_dir, f"{self.stem}.part*.m4a")))
 
     def close_logs(self) -> None:
         for handle in self._stderr_handles:
@@ -632,7 +760,7 @@ class MuxerManager:
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.PIPE,
                 text=True,
-                timeout=1800,
+                timeout=int(getattr(_config, "MERGE_TIMEOUT_SECONDS", 21600)),
                 creationflags=_CREATIONFLAGS,
             )
             if result.returncode != 0:

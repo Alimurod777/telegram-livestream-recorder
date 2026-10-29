@@ -9,6 +9,7 @@ import numpy as np
 
 import config
 from config import AUDIO_CHANNELS, AUDIO_SAMPLE_RATE
+from ffmpeg_helper import write_all
 
 logger = logging.getLogger(__name__)
 
@@ -40,6 +41,7 @@ class AudioMixer:
         self._rotate_event = threading.Event()
         self._thread: Optional[threading.Thread] = None
         self._swap_factory: Optional[Callable[[], subprocess.Popen]] = None
+        self._pending = bytearray()
 
     def set_swap_factory(self, factory: Callable[[], subprocess.Popen]) -> None:
         self._swap_factory = factory
@@ -65,22 +67,16 @@ class AudioMixer:
                     accumulator[: len(samples)] += samples.astype(np.int32)
                 mixed = (accumulator // len(arrays)).astype("<i2")
 
-            data = mixed.tobytes()
-            if len(data) < TICK_BYTES:
-                data = data.ljust(TICK_BYTES, b"\0")
-            elif len(data) > TICK_BYTES:
-                data = data[:TICK_BYTES]
-
-            try:
-                self.audio_queue.put_nowait(data)
-                self.audio_frames += 1
-            except queue.Full:
-                self.audio_dropped += 1
+            self._pending.extend(mixed.tobytes())
+            while len(self._pending) >= TICK_BYTES:
+                data = bytes(self._pending[:TICK_BYTES])
+                del self._pending[:TICK_BYTES]
                 try:
-                    self.audio_queue.get_nowait()
                     self.audio_queue.put_nowait(data)
-                except (queue.Empty, queue.Full):
-                    pass
+                    self.audio_frames += 1
+                except queue.Full:
+                    self.audio_dropped += 1
+                    logger.warning("Audio queue full: dropped=%s", self.audio_dropped)
         except Exception:
             logger.exception("Audio mixing failed")
 
@@ -101,6 +97,8 @@ class AudioMixer:
     def join_writer(self, timeout: float = 5.0) -> None:
         if self._thread and self._thread.is_alive():
             self._thread.join(timeout)
+            if self._thread.is_alive():
+                raise TimeoutError("Audio writer did not drain")
 
     def _swap_process(self) -> Optional[subprocess.Popen]:
         if not self._swap_factory:
@@ -137,8 +135,6 @@ class AudioMixer:
             time.sleep(0.01)
 
         deadline = time.monotonic()
-        fade_factor = 1.0
-        last_chunk_arr = np.zeros(TICK_SAMPLES * AUDIO_CHANNELS, dtype=np.int32)
 
         def _close(proc: subprocess.Popen) -> None:
             try:
@@ -147,7 +143,7 @@ class AudioMixer:
                 pass
 
         try:
-            while not self._stop_event.is_set() or not self.audio_queue.empty():
+            while not self._stop_event.is_set() or not self.audio_queue.empty() or self._pending:
                 if self._rotate_event.is_set():
                     self._rotate_event.clear()
                     new_process = self._swap_process()
@@ -157,19 +153,16 @@ class AudioMixer:
 
                 try:
                     chunk = self.audio_queue.get(timeout=0.01)
-                    fade_factor = 1.0
-                    last_chunk_arr = np.frombuffer(chunk, dtype="<i2").astype(np.int32)
                 except queue.Empty:
-                    if fade_factor > 0:
-                        fade_factor = max(0.0, fade_factor - 0.2)
-                        arr = (last_chunk_arr * fade_factor).astype("<i2")
-                        chunk = arr.tobytes()
+                    if self._stop_event.is_set() and self._pending:
+                        chunk = bytes(self._pending).ljust(TICK_BYTES, b"\0")
+                        self._pending.clear()
                     else:
                         chunk = silence
 
                 try:
-                    process.stdin.write(chunk)
-                except (BrokenPipeError, OSError):
+                    write_all(process.stdin, chunk)
+                except (OSError, ValueError):
                     self.pipe_recoveries += 1
                     logger.warning(
                         "Audio encoder pipe broken (recovery #%s), swapping process",
@@ -181,8 +174,8 @@ class AudioMixer:
                     _close(process)
                     process = new_process
                     try:
-                        process.stdin.write(chunk)
-                    except (BrokenPipeError, OSError):
+                        write_all(process.stdin, chunk)
+                    except (OSError, ValueError):
                         break
 
                 deadline += 0.01
