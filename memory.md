@@ -7,6 +7,24 @@
 
 ## HOZIRGI HOLAT (2026-10-25)
 
+### Efir tugashi va yakunlash/yuborish (2026-10-30)
+- Watchdog har 30 soniyada Telegram full-chat/call holatini yangidan o‘qiydi;
+  call yo‘qolsa, tugatilsa yoki call ID almashsa, yozuv yakunlanadi.
+  Tarmoq xatosi yoki kadr kelmasligining o‘zi auto-stop sababi emas.
+- Faylga ishlov beruvchi FFmpeg buyruqlari `-nostdin` bilan ishlaydi.
+  Jonli muhitda terminaldan `c` buyrug‘ini o‘qigan remux `Enter command` da
+  tiqilib qolgan edi; tuzatilgan remux 6.5 soniyada tugadi.
+- 6-yozuv qayta tiklandi: 378118344 bayt video va 65862410 bayt audio
+  botning o‘z MTProto sessiyasidan yuborildi, Telegram tasdiqladi.
+  Asl fayllar va yetkazish jurnali recordings papkasida saqlandi.
+- User MTProto ishlamasa, bot-token bilan alohida MTProto sessiyasi yuklaydi;
+  Bot API oxirgi zaxira. FloodWait birinchi yo‘lda bo‘lsa zaxiraga darhol o‘tadi.
+- Progress o‘zgarmasa qayta edit qilinmaydi; Telegramning `message is not modified`
+  javobi muvaffaqiyat deb qabul qilinadi.
+- MTProto video yuklashida thumbnail yetishmasa, FFmpeg JPEG yaratadi.
+  Tiklangan video 5656 bayt JPEG thumbnail bilan qayta yuborildi va tasdiqlandi.
+- Polling standartlari 5/15 soniya; yakuniy tekshiruvda 75 ta test o‘tdi.
+
 ### RTMP audio so‘rovi tuzatildi (2026-10-30)
 PyTgCalls `download_stream()` audio uchun `video_channel=None` bilan birga
 `video_quality=2` yuborardi. Pyrofork TL serializer bu ikkala maydon uchun

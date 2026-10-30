@@ -18,6 +18,9 @@ BOT_TOKEN = os.getenv("BOT_TOKEN", "").strip()
 # telegram-bot-api server can accept files up to 2 GB; point BOT_API_BASE_URL
 # at it and raise BOT_API_UPLOAD_LIMIT when using one.
 BOT_API_BASE_URL = os.getenv("BOT_API_BASE_URL", "https://api.telegram.org").rstrip("/")
+# Telegram's long poll must finish before the HTTP socket deadline.
+POLLING_TIMEOUT = max(1, int(os.getenv("POLLING_TIMEOUT", "5")))
+POLLING_HTTP_TIMEOUT = max(POLLING_TIMEOUT + 10, int(os.getenv("POLLING_HTTP_TIMEOUT", "15")))
 _public_bot_api = "api.telegram.org" in BOT_API_BASE_URL.lower()
 BOT_API_UPLOAD_LIMIT = int(
     os.getenv("BOT_API_UPLOAD_LIMIT", "49000000" if _public_bot_api else "1900000000")

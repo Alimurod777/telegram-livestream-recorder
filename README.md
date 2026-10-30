@@ -32,6 +32,22 @@ bitta yozuv boshlashi mumkin; umumiy parallel yozuvlar soni serverning
 CPU, RAM, disk va internet imkoniyatlariga bog‘liq. Bitta bot tokeni uchun
 bitta polling jarayonini ishga tushiring.
 
+Telegram long polling 5 soniya kutadi, HTTP ulanishining kutish chegarasi
+15 soniya. Buyruq kelsa, Telegram javobni kutish muddati tugashidan oldin
+qaytaradi. `.env` orqali `POLLING_TIMEOUT=5` va `POLLING_HTTP_TIMEOUT=15`
+ni o‘zgartirish mumkin.
+Vaqtinchalik timeout bo‘lsa, bot oxirgi update offset bilan qayta urinadi;
+media yozuvi mustaqil davom etadi. Timeout muntazam takrorlansa, serverdan
+`api.telegram.org:443` ga ulanish va hosting tarmog‘ini tekshiring.
+
+Efir holati Telegram’dan har 30 soniyada qayta tekshiriladi. Efir tugasa
+yoki o‘rniga yangi efir boshlansa, avvalgi yozuv yakunlanadi va akkaunt
+qo‘ng‘iroqdan chiqadi; Telegram login sessiyasi keyingi yozuvlar uchun qoladi.
+Audio/video kelmasligining o‘zi efir tugagan deb hisoblanmaydi.
+Foydalanuvchi MTProto yuklashi ishlamasa, bot o‘z MTProto sessiyasi orqali
+faylni foydalanuvchiga yuboradi. Bot API oxirgi zaxira yo‘l bo‘lib qoladi.
+Fayllar yuborilgani tasdiqlanmaguncha o‘chirilmaydi.
+
 Follow these steps to deploy or run the project on a new computer after cloning:
 
 ### 1. Clone the repository

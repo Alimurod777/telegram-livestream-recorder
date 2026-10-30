@@ -555,7 +555,7 @@ class RecorderCheckpointTests(unittest.IsolatedAsyncioTestCase):
 
         with patch.object(bot, "send_message", new=AsyncMock(return_value={"ok": True, "result": {"message_id": 55}})) as send, patch.object(
             bot, "edit_message_text", new=AsyncMock(side_effect=edit)
-        ), patch.object(bot.asyncio, "sleep", new=AsyncMock()) as sleep:
+        ), patch.object(bot, "progress_text", side_effect=["recording 0", "recording 1", "recording 2"]), patch.object(bot.asyncio, "sleep", new=AsyncMock()) as sleep:
             await bot.recording_progress(session)
             self.assertEqual(session.progress_message_id, 55)
             send.assert_awaited_once()
@@ -565,6 +565,14 @@ class RecorderCheckpointTests(unittest.IsolatedAsyncioTestCase):
 
 
 class SessionPersistenceTests(unittest.TestCase):
+    def setUp(self):
+        self.session_directory = tempfile.TemporaryDirectory()
+        self.addCleanup(self.session_directory.cleanup)
+        session_path = os.path.join(self.session_directory.name, "sessions")
+        setting = patch("config.SESSION_DIR", session_path)
+        setting.start()
+        self.addCleanup(setting.stop)
+
     def test_new_offline_session_wins_over_stale_mongo_after_restart(self):
         from database import Database
         with tempfile.TemporaryDirectory() as directory:

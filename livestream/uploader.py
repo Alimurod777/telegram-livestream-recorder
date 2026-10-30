@@ -73,9 +73,9 @@ class Uploader:
             if not valid_media(audio):
                 temporary = key + ".audio.tmp.m4a"
                 try:
-                    subprocess.run([get_ffmpeg_path(), "-y", "-v", "error", "-i", output,
+                    subprocess.run([get_ffmpeg_path(), "-nostdin", "-y", "-v", "error", "-i", output,
                                     "-map", "0:a:0", "-vn", "-c:a", "copy", "-movflags", "+faststart", temporary],
-                                   check=True, capture_output=True, timeout=1800)
+                                   check=True, capture_output=True, stdin=subprocess.DEVNULL, timeout=1800)
                     if not valid_media(temporary):
                         raise RuntimeError("Extracted audio is invalid")
                     os.replace(temporary, audio)

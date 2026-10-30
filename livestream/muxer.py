@@ -569,7 +569,7 @@ class MuxerManager:
                             os.remove(temporary)
             return output_path
         signatures = [tuple((s.get("codec_type"), s.get("codec_name"), s.get("width"), s.get("height"),
-                             s.get("avg_frame_rate"), s.get("sample_rate"), s.get("channels"))
+                             s.get("sample_rate"), s.get("channels"))
                             for s in m["streams"]) for m in metadata]
         normalized = []
         inputs = parts
@@ -754,9 +754,12 @@ class MuxerManager:
 
     @staticmethod
     def _run_ffmpeg(command: List[str], description: str) -> bool:
+        # File remuxes must not consume the bot's interactive terminal input.
+        command = [command[0], "-nostdin", *command[1:]]
         try:
             result = subprocess.run(
                 command,
+                stdin=subprocess.DEVNULL,
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.PIPE,
                 text=True,

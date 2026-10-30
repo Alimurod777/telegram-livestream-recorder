@@ -68,6 +68,21 @@ def write_all(pipe, data: bytes) -> None:
         view = view[written:]
 
 
+def extract_video_thumbnail(path: str, at_sec: float = 0.0):
+    """Return a small Telegram-compatible JPEG without terminal interaction."""
+    try:
+        result = subprocess.run(
+            [get_ffmpeg_path(), "-nostdin", "-v", "error", "-ss", str(max(0, at_sec)),
+             "-i", path, "-frames:v", "1", "-vf", "scale=320:320:force_original_aspect_ratio=decrease",
+             "-f", "image2", "-q:v", "4", "pipe:1"],
+            stdin=subprocess.DEVNULL, capture_output=True, timeout=30,
+        )
+        data = result.stdout
+        return data if result.returncode == 0 and data.startswith(b"\xff\xd8") and 100 < len(data) < 200_000 else None
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+
+
 def get_file_size(file_path: str) -> int:
     return os.path.getsize(file_path) if os.path.exists(file_path) else 0
 

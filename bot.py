@@ -45,7 +45,7 @@ from config import (
     OUTPUT_DIR,
 )
 from database import db
-from ffmpeg_helper import get_ffmpeg_path, get_ffprobe_path
+from ffmpeg_helper import get_ffmpeg_path, get_ffprobe_path, extract_video_thumbnail
 from livestream.accounts import account_manager
 from livestream.dispatcher import UserUpdateDispatcher
 from livestream.mtproto_uploader import mtproto_uploader
@@ -53,6 +53,11 @@ from livestream.metadata import media_kind
 from stream_recorder import RecordingSession, stream_recorder
 
 WAIT_PROBE_INTERVAL = int(getattr(_config, "WAIT_PROBE_INTERVAL", 120))
+POLLING_TIMEOUT = max(1, int(getattr(_config, "POLLING_TIMEOUT", os.getenv("POLLING_TIMEOUT", "5"))))
+POLLING_HTTP_TIMEOUT = max(
+    POLLING_TIMEOUT + 10,
+    int(getattr(_config, "POLLING_HTTP_TIMEOUT", os.getenv("POLLING_HTTP_TIMEOUT", "15"))),
+)
 # Deliver big files over MTProto (user session): 2 GB/file, 4 GB premium.
 # Bot API (50 MB public) is only a fallback when no session is available.
 USE_USERBOT_UPLOAD = bool(getattr(_config, "USE_USERBOT_UPLOAD", True))
@@ -264,11 +269,14 @@ def bot_api(method: str, data: Optional[Dict[str, Any]] = None, timeout: int = 6
             return json.loads(resp.read().decode("utf-8"))
     except urllib.error.HTTPError as exc:
         body = exc.read().decode("utf-8", errors="replace")
-        logger.error("Bot API %s HTTP %s: %s", method, exc.code, body)
         try:
             result = json.loads(body)
         except ValueError:
+            logger.error("Bot API %s HTTP %s: invalid response", method, exc.code)
             raise
+        if method == "editMessageText" and exc.code == 400 and "message is not modified" in result.get("description", "").lower():
+            return {"ok": True, "result": True}
+        logger.error("Bot API %s HTTP %s: %s", method, exc.code, body)
         raise BotAPIError(result) from None
     except urllib.error.URLError as exc:
         logger.error("Bot API %s network error: %s", method, exc.reason)
@@ -457,11 +465,16 @@ async def send_photo(chat_id: int, image: BytesIO, caption: str):
 
 
 async def get_updates(offset: Optional[int]):
-    data: Dict[str, Any] = {"timeout": 25, "limit": 20}
+    data: Dict[str, Any] = {"timeout": POLLING_TIMEOUT, "limit": 20}
     if offset is not None:
         data["offset"] = offset
     def run():
-        return bot_api("getUpdates", data, timeout=35)
+        try:
+            return bot_api("getUpdates", data, timeout=POLLING_HTTP_TIMEOUT)
+        except urllib.error.URLError as exc:
+            if isinstance(exc.reason, TimeoutError):
+                raise TimeoutError("Bot API connection timed out") from None
+            raise
     return await asyncio.to_thread(run)
 
 
@@ -514,21 +527,7 @@ def probe_media(path: str) -> Dict[str, Any]:
 
 def extract_thumbnail(path: str, at_sec: float = 5.0) -> Optional[bytes]:
     """Extract a JPEG thumbnail via ffmpeg (best-effort)."""
-    try:
-        result = subprocess.run(
-            [
-                get_ffmpeg_path(), "-y", "-hide_banner", "-loglevel", "error",
-                "-ss", str(at_sec), "-i", path,
-                "-frames:v", "1", "-vf", "scale=320:320:force_original_aspect_ratio=decrease",
-                "-f", "image2", "-q:v", "4", "pipe:1",
-            ],
-            capture_output=True, timeout=60,
-            creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
-        )
-        data = result.stdout
-        return data if data and 100 < len(data) < 200_000 else None
-    except Exception:
-        return None
+    return extract_video_thumbnail(path, at_sec)
 
 
 async def send_recording_file(
@@ -1153,7 +1152,7 @@ async def upload_part(session: RecordingSession, file_path: str, index: int, tot
         raise FileNotFoundError(file_path)
     if file_path in session.uploaded_parts:
         return True
-    limit = int(getattr(_config, "USERBOT_UPLOAD_LIMIT", 1_990_000_000)) if USE_USERBOT_UPLOAD else BOT_API_UPLOAD_LIMIT
+    limit = max(BOT_API_UPLOAD_LIMIT, int(getattr(_config, "USERBOT_UPLOAD_LIMIT", 1_990_000_000)))
     if os.path.getsize(file_path) > limit:
         if not allow_split:
             raise RuntimeError("Delivery window exceeds upload limit; retained for recovery")
@@ -1203,8 +1202,9 @@ async def upload_part(session: RecordingSession, file_path: str, index: int, tot
                         "MTProto upload FloodWait(%ss) for %s",
                         seconds, file_path,
                     )
-                    if attempt_no < 3:
-                        await asyncio.sleep(seconds)
+                    # A rate-limited recording account must not delay the
+                    # independent bot session used for delivery.
+                    break
                 except Exception as exc:
                     logger.warning(
                         "MTProto upload %s attempt %s failed: %s",
@@ -1213,7 +1213,31 @@ async def upload_part(session: RecordingSession, file_path: str, index: int, tot
                     if attempt_no < 3:
                         await asyncio.sleep(attempt_no * 5)
         else:
-            logger.info("No live user session — using Bot API for %s", file_path)
+            logger.info("No live user session — trying bot MTProto for %s", file_path)
+
+    # Bot MTProto uploads large files directly to the user even if their
+    # recording account disconnected or was rate-limited.
+    try:
+        delivery_bot = await mtproto_uploader.get_delivery_bot(API_ID, API_HASH, BOT_TOKEN)
+        info = await asyncio.to_thread(probe_media, file_path)
+        info.update(chat_id=session.channel_id, stream_id=session.telegram_call_id or session.recording_id)
+        if info.get("has_video"):
+            info["thumb"] = await asyncio.to_thread(extract_thumbnail, file_path)
+        await mtproto_uploader.send(
+            delivery_bot, BOT_USERNAME, file_path, caption, info,
+            channel_title=session.channel_title, recipient_id=session.user_id,
+        )
+    except Exception as exc:
+        logger.warning("Bot MTProto upload failed for %s: %s; trying Bot API", file_path, exc)
+    else:
+        session.uploaded_parts.add(file_path)
+        session.uploader.write_manifest()
+        try:
+            os.remove(file_path)
+        except OSError as exc:
+            logger.warning("Could not remove delivered file %s: %s", file_path, exc)
+        logger.info("Uploaded %s via bot MTProto (%.1f MB)", os.path.basename(file_path), size_mb)
+        return True
 
     files = [file_path]
     if os.path.getsize(file_path) > BOT_API_UPLOAD_LIMIT:
@@ -1278,16 +1302,22 @@ def progress_text(session: RecordingSession) -> str:
 
 
 async def recording_progress(session: RecordingSession) -> None:
+    last_text = None
     while True:
         if session.delivery_complete:
             return
         try:
+            text = progress_text(session)
             if session.progress_message_id:
-                await edit_message_text(session.user_id, session.progress_message_id, progress_text(session))
+                if text != last_text:
+                    result = await edit_message_text(session.user_id, session.progress_message_id, text)
+                    if result and result.get("ok"):
+                        last_text = text
             else:
-                result = await send_message(session.user_id, progress_text(session))
+                result = await send_message(session.user_id, text)
                 if result and result.get("ok"):
                     session.progress_message_id = result["result"]["message_id"]
+                    last_text = text
             await asyncio.to_thread(session.uploader.write_manifest)
         except Exception:
             logger.warning("Progress update failed: user=%s", session.user_id, exc_info=True)
@@ -2187,6 +2217,10 @@ async def main():
                 backoff = min(max(backoff * 2, 3), max_backoff)
             logger.error("Polling HTTP %s, retry in %ss", exc.code, backoff)
             await asyncio.sleep(backoff)
+        except TimeoutError:
+            backoff = min(max(backoff * 2, 3), max_backoff)
+            logger.warning("Bot API polling timed out; retrying in %ss. Media capture continues.", backoff)
+            await asyncio.sleep(backoff)
         except Exception as exc:
             backoff = min(max(backoff * 2, 3), max_backoff)
             logger.exception("Polling error, retry in %ss: %s", backoff, exc)
@@ -2205,6 +2239,7 @@ async def main():
             waiting["task"].cancel()
     await stream_recorder.cleanup_all()
     await stream_recorder.wait_for_deliveries(timeout=30)
+    await mtproto_uploader.close()
     print("[SHUTDOWN] Stopping user clients...", flush=True)
     await shutdown_clients()
     await account_manager.shutdown()

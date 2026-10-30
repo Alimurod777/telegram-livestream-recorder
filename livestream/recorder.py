@@ -21,7 +21,7 @@ import uuid
 from datetime import datetime
 from typing import Any, Awaitable, Callable, Dict, List, Optional, Tuple
 
-from pyrogram import Client
+from pyrogram import Client, raw
 from pytgcalls import PyTgCalls
 from pytgcalls.types import GroupCallConfig, RecordStream
 from pytgcalls.types.raw import AudioParameters
@@ -318,7 +318,7 @@ class StreamRecorder:
             for stale in glob.glob(pattern):
                 os.remove(stale)
             command = [
-                ffmpeg, "-y", "-v", "error", "-i", file_path,
+                ffmpeg, "-nostdin", "-y", "-v", "error", "-i", file_path,
                 "-map", "0", "-c", "copy", "-f", "segment",
                 "-segment_time", str(max(segment_time, 0.01)),
                 "-segment_format", "mp4" if ext == ".m4a" else ext.lstrip("."),
@@ -598,6 +598,37 @@ class StreamRecorder:
 
     # ── Watchdog ─────────────────────────────────────────────────────────
 
+    async def _call_has_ended(self, session: RecordingSession) -> bool:
+        """Read fresh Telegram state; the native calls cache can outlive a call."""
+        client = session.client
+        peer = await client.resolve_peer(session.channel_id)
+        if isinstance(peer, raw.types.InputPeerChannel):
+            full = await client.invoke(raw.functions.channels.GetFullChannel(
+                channel=raw.types.InputChannel(channel_id=peer.channel_id, access_hash=peer.access_hash)))
+        elif isinstance(peer, raw.types.InputPeerChat):
+            full = await client.invoke(raw.functions.messages.GetFullChat(chat_id=peer.chat_id))
+        else:
+            raise ValueError("Recording target must be a group or channel")
+        call = full.full_chat.call
+        if call is None:
+            return True
+        if session.telegram_call_id is not None and call.id != session.telegram_call_id:
+            return True
+        result = await client.invoke(raw.functions.phone.GetGroupCall(call=call, limit=1))
+        return isinstance(result.call, raw.types.GroupCallDiscarded)
+
+    async def _stop_if_call_ended(self, session: RecordingSession) -> bool:
+        try:
+            ended = await asyncio.wait_for(self._call_has_ended(session), timeout=15)
+        except Exception as exc:
+            logger.warning("Could not verify Telegram call state: user=%s error=%s", session.user_id, type(exc).__name__)
+            return False
+        if ended and not session.finalizing:
+            logger.info("Telegram confirmed stream ended: user=%s chat=%s", session.user_id, session.channel_id)
+            # A separate task survives cancellation of this watchdog during stop.
+            asyncio.create_task(self.stop_recording(session.user_id, reason="Telegram stream ended"))
+        return ended
+
     async def _watchdog_loop(self, session: RecordingSession, is_video: bool) -> None:
         last_stats = 0.0
         while not session.stop_event.is_set():
@@ -605,6 +636,8 @@ class StreamRecorder:
             if session.finalizing:
                 return
             try:
+                if await self._stop_if_call_ended(session):
+                    return
                 # call membership: rejoin if Telegram dropped us
                 call_client = session.call_client
                 if call_client and not session.finalizing:

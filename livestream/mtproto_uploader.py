@@ -8,11 +8,13 @@ sent into the user<->bot chat so everything lands in one place.
 Falls back to Bot API on failure (caller's responsibility).
 """
 
+import asyncio
 import logging
 import os
 import tempfile
 from typing import Any, Dict, Optional
-from pyrogram import enums
+from pyrogram import Client, enums
+from ffmpeg_helper import extract_video_thumbnail
 from .metadata import media_kind
 
 logger = logging.getLogger(__name__)
@@ -23,6 +25,28 @@ _THUMB_BYTES = 100
 class MtprotoUploader:
     def __init__(self):
         self._bot_peer: Dict[int, Any] = {}  # id(client) -> Chat
+        self._delivery_bot = None
+        self._delivery_bot_lock = asyncio.Lock()
+
+    async def get_delivery_bot(self, api_id, api_hash, bot_token):
+        async with self._delivery_bot_lock:
+            if self._delivery_bot is None:
+                client = Client("delivery_bot", api_id=api_id, api_hash=api_hash,
+                                bot_token=bot_token, in_memory=True, no_updates=True)
+                try:
+                    await client.start()
+                except BaseException:
+                    if client.is_connected:
+                        await client.disconnect()
+                    raise
+                self._delivery_bot = client
+            return self._delivery_bot
+
+    async def close(self):
+        async with self._delivery_bot_lock:
+            if self._delivery_bot is not None:
+                await self._delivery_bot.stop()
+                self._delivery_bot = None
 
     async def _resolve_peer(self, client, bot_username: str):
         key = id(client)
@@ -70,29 +94,36 @@ class MtprotoUploader:
         caption: str,
         info: Dict[str, Any],
         channel_title: str = "",
+        recipient_id: Optional[int] = None,
     ) -> bool:
         """Send one file as native media via MTProto.
 
         Raises on failure (incl. FloodWait) so the caller can fall back.
         """
-        if not bot_username:
+        if recipient_id is None and not bot_username:
             raise RuntimeError("bot username unknown (not started?)")
-        peer = await self._resolve_peer(client, bot_username)
+        peer = await client.resolve_peer(recipient_id) if recipient_id is not None else await self._resolve_peer(client, bot_username)
+        target = recipient_id if recipient_id is not None else peer.id
         kind = media_kind(file_path, info)
-        thumb_path = self._write_thumb(info.get("thumb"))
+        thumbnail = info.get("thumb")
+        if kind == "video" and not thumbnail:
+            thumbnail = await asyncio.to_thread(
+                extract_video_thumbnail, file_path, min(5.0, max(0.0, float(info.get("duration") or 0) / 2)),
+            )
+        thumb_path = self._write_thumb(thumbnail)
         title = os.path.splitext(os.path.basename(file_path))[0]
         duration = int(info.get("duration") or 0)
         progress = self._progress_logger(info)
         try:
             if kind == "video_note":
                 result = await client.send_video_note(
-                    peer.id, video_note=file_path, duration=duration,
+                    target, video_note=file_path, duration=duration,
                     length=int(info.get("width") or 1), thumb=thumb_path,
                     progress=progress,
                 )
             elif kind == "video":
                 result = await client.send_video(
-                    peer.id,
+                    target,
                     video=file_path,
                     caption=caption,
                     parse_mode=enums.ParseMode.DISABLED,
@@ -105,7 +136,7 @@ class MtprotoUploader:
                 )
             elif kind == "voice":
                 result = await client.send_voice(
-                    peer.id,
+                    target,
                     voice=file_path,
                     caption=caption,
                     parse_mode=enums.ParseMode.DISABLED,
@@ -114,7 +145,7 @@ class MtprotoUploader:
                 )
             elif kind == "audio":
                 result = await client.send_audio(
-                    peer.id,
+                    target,
                     audio=file_path,
                     caption=caption,
                     parse_mode=enums.ParseMode.DISABLED,
@@ -126,7 +157,7 @@ class MtprotoUploader:
                 )
             else:
                 result = await client.send_document(
-                    peer.id, document=file_path, caption=caption,
+                    target, document=file_path, caption=caption,
                     parse_mode=enums.ParseMode.DISABLED, progress=progress,
                 )
             if result is None:
