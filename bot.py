@@ -47,6 +47,7 @@ from config import (
 from database import db
 from ffmpeg_helper import get_ffmpeg_path, get_ffprobe_path
 from livestream.accounts import account_manager
+from livestream.dispatcher import UserUpdateDispatcher
 from livestream.mtproto_uploader import mtproto_uploader
 from livestream.metadata import media_kind
 from stream_recorder import RecordingSession, stream_recorder
@@ -1266,6 +1267,8 @@ def progress_text(session: RecordingSession) -> str:
     hours, remainder = divmod(elapsed, 3600)
     minutes, seconds = divmod(remainder, 60)
     state = "Yuborildi" if getattr(session, "delivery_complete", False) else "Xato: " + session.error if session.error else "Tayyorlanmoqda" if session.finalizing else "Yozilmoqda"
+    if not session.finalizing and not session.video_frames and not session.audio_mixer.audio_frames:
+        state = "Telegram’dan audio/video kutilmoqda — hali media kelmadi"
     source = session.active_video_source
     media = f"Video + audio ({source.width}×{source.height})" if source else "Audio"
     return (f"🔴 {session.channel_title}\n{state}\n"
@@ -1695,7 +1698,7 @@ async def handle_send(chat_id: int, user_id: int) -> None:
         await send_message(chat_id, "Faol yozuv yo‘q. Avval /record orqali boshlang.")
         return
     if not await stream_recorder.send_current_part(user_id):
-        await send_message(chat_id, "Yuborish uchun hali yetarli yozuv yo‘q yoki yozuv tugatilmoqda.")
+        await send_message(chat_id, "Yuborish uchun hali yetarli media kelmadi yoki yozuv tugatilmoqda. /status orqali holatni tekshiring.")
         return
     await send_message(chat_id, "📤 Hozirgacha yozilgan qism tayyorlanib yuboriladi. "
                        "Yozuv davom etmoqda. ~1.97 GB dan kichik yozuv yakunda /send nusxasi bilan birlashtiriladi.")
@@ -2163,6 +2166,7 @@ async def main():
     offset = None
     backoff = 0
     max_backoff = 60
+    dispatcher = UserUpdateDispatcher(handle_update)
 
     while not _shutdown_event.is_set():
         try:
@@ -2170,7 +2174,7 @@ async def main():
             backoff = 0  # reset on success
             for update in response.get("result", []):
                 offset = int(update["update_id"]) + 1
-                await handle_update(update)
+                dispatcher.submit(update)
         except urllib.error.HTTPError as exc:
             if exc.code == 409:
                 logger.error("409 Conflict — another polling instance exists. Retrying deleteWebhook...")
@@ -2189,6 +2193,7 @@ async def main():
             await asyncio.sleep(backoff)
 
     # Clean shutdown
+    await dispatcher.close()
     print("[SHUTDOWN] Finalizing active recordings...", flush=True)
     pending_records = list(record_requests.values())
     for task in pending_records:

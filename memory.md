@@ -7,6 +7,17 @@
 
 ## HOZIRGI HOLAT (2026-10-25)
 
+### RTMP audio so‘rovi tuzatildi (2026-10-30)
+PyTgCalls `download_stream()` audio uchun `video_channel=None` bilan birga
+`video_quality=2` yuborardi. Pyrofork TL serializer bu ikkala maydon uchun
+bitta flag ishlatadi; natijada noto‘g‘ri so‘rov va `INPUT_FETCH_ERROR` kelardi.
+`livestream/broadcast.py` har PyTgCalls instansiyasining Pyrogram bridge’iga
+tuzatish o‘rnatadi: audio uchun ikkala video maydoni ham tashlab ketiladi.
+Jonli RTMP kanalida eski so‘rov xatosi qayta kuzatildi; tuzatilgan so‘rov
+17 387 bayt audio segment qaytardi. PyTgCalls 3.0.0 da ham shu so‘rov tuzilishi
+bor, shuning uchun faqat versiya almashtirish bu xatoni bartaraf etmaydi.
+Bo‘sh yozuv stop paytida FFmpeg muxer’iga berilmaydi; aniq sabab qaytariladi.
+
 ### QA-009: Sifat — native resolution (2026-10-25)
 Eski kod `VideoParameters(1280x720)` bilan SFU dan past sifat so'rar va
 hamma kadrni 1280x720 canvas ga pad/scale qilardi. Endi:

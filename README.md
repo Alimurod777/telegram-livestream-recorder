@@ -19,6 +19,19 @@ Masalan, 3 soatlik efirda 1-soatda `/send` berilsa, 0–1 soat nusxasi yuborilad
 
 ## 🛠️ Installation & Setup (Boshqa kompyuterda ishga tushirish uchun)
 
+### Bir nechta foydalanuvchi
+
+Bitta bot jarayoni bir nechta foydalanuvchiga parallel xizmat qiladi.
+Har kim shaxsiy chatda o‘z Telegram akkaunti bilan `/login` qiladi va
+`/target`, `/record`, `/send`, `/stop` buyruqlaridan foydalanadi.
+Buyruqlar har bir foydalanuvchi uchun tartib bilan bajariladi; boshqa
+foydalanuvchining sekin so‘rovi ularni kutib qolishga majbur qilmaydi.
+Sessiyalar, kanal tanlovi va yozuvlar foydalanuvchi bo‘yicha ajratilgan,
+fayllar `recordings/{user_id}/` ichida saqlanadi. Har foydalanuvchi bir vaqtda
+bitta yozuv boshlashi mumkin; umumiy parallel yozuvlar soni serverning
+CPU, RAM, disk va internet imkoniyatlariga bog‘liq. Bitta bot tokeni uchun
+bitta polling jarayonini ishga tushiring.
+
 Follow these steps to deploy or run the project on a new computer after cloning:
 
 ### 1. Clone the repository

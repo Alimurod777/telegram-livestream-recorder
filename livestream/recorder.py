@@ -34,6 +34,7 @@ from .audio import AudioMixer
 from .muxer import MuxerManager, VIDEO_CRF, valid_media
 from .uploader import Uploader
 from .event_handler import EventHandler
+from .broadcast import install_broadcast_fix
 
 from config import (
     AUDIO_CHANNELS,
@@ -416,7 +417,7 @@ class StreamRecorder:
             # Stay in WAITING — transition to CAMERA/SCREEN_SHARE happens
             # in EventHandler when the first video frame arrives.
             logger.info(
-                "Recording started: user=%s chat=%s stream=%s (%s) native_source=true",
+                "Capture joined; awaiting media: user=%s chat=%s stream=%s (%s) native_source=true",
                 user_id, channel_id, session.recording_id, channel_title,
             )
 
@@ -498,6 +499,7 @@ class StreamRecorder:
             return existing
 
         call_client = PyTgCalls(client)
+        install_broadcast_fix(call_client)
 
         @call_client.on_update()
         async def recorder_update(_: PyTgCalls, update: Any) -> None:
@@ -508,11 +510,12 @@ class StreamRecorder:
                     if sess.channel_id == int(chat_id) and sess.call_client is call_client:
                         await self._event_handler.handle_update(uid, update)
                         return
+                return
             # fallback: session that shares this client (single-session case)
-            for uid, sess in list(self.active_sessions.items()):
-                if sess.call_client is call_client:
-                    await self._event_handler.handle_update(uid, update)
-                    return
+            owners = [uid for uid, sess in list(self.active_sessions.items())
+                      if sess.call_client is call_client]
+            if len(owners) == 1:
+                await self._event_handler.handle_update(owners[0], update)
 
         await call_client.start()
         self.call_clients[key] = call_client
@@ -733,6 +736,8 @@ class StreamRecorder:
 
         try:
             await asyncio.to_thread(session.audio_mixer.join_writer)
+            if session.video_frames == 0 and session.audio_mixer.audio_frames == 0:
+                raise RuntimeError("Telegram efiridan audio/video kadrlar kelmadi; yozuv bo‘sh. Efir va ulanishni tekshiring.")
             await asyncio.to_thread(session.uploader.finalize)
             if not session.archive_files and not session.output_files:
                 raise RuntimeError("No decodable audio or video frames were received")
