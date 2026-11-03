@@ -19,7 +19,9 @@ logger = logging.getLogger(__name__)
 
 
 def install_broadcast_fix(call_client):
-    bridge = call_client.mtproto_client._bind_client
+    # PyTgCalls.mtproto_client is the original Telegram client, not the
+    # adapter used for broadcast downloads. MtProtoClient exposes the bridge.
+    bridge = call_client._app.mtproto_client
     if not isinstance(bridge, PyrogramClient):
         return
     last_warning = {}

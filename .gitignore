@@ -25,7 +25,10 @@ MANIFEST
 
 # Virtual Environment
 venv/
+.venv/
 .env
+.env.*
+!.env.example
 sessions/
 
 # Secrets & Config
@@ -33,6 +36,9 @@ sessions/
 # Database & Storage
 recorder.db
 recorder.log
+*.log
+*.log.*
+unknown_errors.txt
 recordings/
 bot.polling.lock
 

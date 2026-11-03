@@ -75,8 +75,8 @@ WATCHDOG_INTERVAL = 30       # seconds between health checks
 REJOIN_COOLDOWN = 60         # min seconds between call rejoins
 FRAME_TIMEOUT_WARN = 180     # seconds without frames before warning
 MIN_FREE_DISK_BYTES = int(os.getenv("MIN_FREE_DISK_BYTES", "2000000000"))
-# Conservative deployment policy, not a published Telegram account limit.
-MAX_RECORDINGS_PER_ACCOUNT = int(os.getenv("MAX_RECORDINGS_PER_ACCOUNT", "1"))
+# A Telegram account participates in only one recorded call at a time.
+MAX_RECORDINGS_PER_ACCOUNT = 1  # Telegram account: one active voice chat at a time.
 
 # Waiting mode fallback probe interval (service messages are primary)
 WAIT_PROBE_INTERVAL = 120
@@ -90,3 +90,14 @@ SESSION_DIR = os.getenv("SESSION_DIR", str(Path(__file__).resolve().parent / "se
 # Logging
 LOG_LEVEL = "INFO"
 LOG_FILE = "recorder.log"
+OWNER_ID = int(os.getenv("OWNER_ID", "0").strip() or "0")
+LOGS_ID = int(os.getenv("LOGS_ID", "0").strip() or "0")
+LOG_EXCEPTION = int(os.getenv("LOG_EXCEPTION", "0").strip() or "0")
+LOG_CHANNEL_ID = int(os.getenv("LOG_CHANNEL_ID", "0").strip() or "0") or LOGS_ID or LOG_EXCEPTION
+LOG_DEDUP_SECONDS = max(0, int(os.getenv("LOG_DEDUP_SECONDS", "120")))
+FORCE_SUB_ENABLED = os.getenv("FORCE_SUB_ENABLED", "false").lower() in {"1", "true", "yes", "on"}
+SUBSCRIBE_CHANNEL = os.getenv("SUBSCRIBE_CHANNEL", "0").strip()
+SUBSCRIBE_CHANNEL = int(SUBSCRIBE_CHANNEL) if SUBSCRIBE_CHANNEL.lstrip("-").isdigit() else SUBSCRIBE_CHANNEL
+SUBSCRIBE_CHANNEL_URL = os.getenv("SUBSCRIBE_CHANNEL_URL", "").strip()
+if FORCE_SUB_ENABLED and not SUBSCRIBE_CHANNEL:
+    raise ValueError("FORCE_SUB_ENABLED requires SUBSCRIBE_CHANNEL")

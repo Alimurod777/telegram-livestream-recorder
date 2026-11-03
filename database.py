@@ -162,11 +162,14 @@ class Database:
                 user_id INTEGER PRIMARY KEY, channel_id INTEGER NOT NULL,
                 title TEXT NOT NULL
             )""")
+            waiting_columns = {row[1] for row in cursor.execute("PRAGMA table_info(waiting_streams)")}
+            if "account_id" not in waiting_columns:
+                cursor.execute("ALTER TABLE waiting_streams ADD COLUMN account_id INTEGER")
 
-    def save_waiting(self, user_id: int, channel_id: int, title: str) -> None:
+    def save_waiting(self, user_id: int, channel_id: int, title: str, account_id: Optional[int] = None) -> None:
         with self._get_connection() as conn:
-            conn.execute("INSERT OR REPLACE INTO waiting_streams VALUES (?, ?, ?)",
-                         (user_id, channel_id, title))
+            conn.execute("INSERT OR REPLACE INTO waiting_streams (user_id, channel_id, title, account_id) VALUES (?, ?, ?, ?)",
+                         (user_id, channel_id, title, account_id))
 
     def delete_waiting(self, user_id: int) -> None:
         with self._get_connection() as conn:
@@ -174,7 +177,8 @@ class Database:
 
     def list_waiting(self) -> List[Dict[str, Any]]:
         with self._get_connection() as conn:
-            return [dict(row) for row in conn.execute("SELECT * FROM waiting_streams")]
+            return [{k: v for k, v in dict(row).items() if k != "account_id" or v is not None}
+                    for row in conn.execute("SELECT * FROM waiting_streams")]
 
     # ── Recording account pool (multi-account support) ───────────────────
 

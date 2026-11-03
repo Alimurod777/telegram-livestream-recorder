@@ -18,7 +18,6 @@ from typing import Dict, List, Optional, Tuple
 from pyrogram import Client
 
 from config import API_HASH, API_ID
-import config
 from database import db
 
 logger = logging.getLogger(__name__)
@@ -101,6 +100,18 @@ class AccountManager:
         async with self._selection_lock:
             return await self._pick_account(owner_id, exclude)
 
+    async def reserve_account(self, owner_id: int, account_id: int) -> Optional[Tuple[Client, int]]:
+        """Reserve a specific owned, healthy account atomically."""
+        async with self._selection_lock:
+            rows = await self.healthy_accounts(owner_id)
+            if account_id not in {int(row["account_id"]) for row in rows} or self._active.get(account_id, 0):
+                return None
+            client = await self.get_client(account_id)
+            if client:
+                self.mark_busy(account_id)
+                return client, account_id
+        return None
+
     async def _pick_account(self, owner_id: int, exclude: Optional[set]) -> Optional[Tuple[Client, int]]:
         """Return (client, account_id) for the healthiest, least-loaded account."""
         exclude = exclude or set()
@@ -113,9 +124,7 @@ class AccountManager:
         )
         for row in rows:
             account_id = int(row["account_id"])
-            if account_id in exclude or self._active.get(account_id, 0) >= max(
-                1, int(getattr(config, "MAX_RECORDINGS_PER_ACCOUNT", 1))
-            ):
+            if account_id in exclude or self._active.get(account_id, 0) >= 1:
                 continue
             client = await self.get_client(account_id)
             if client:

@@ -19,6 +19,7 @@ if "config" not in sys.modules:
     _temporary = tempfile.TemporaryDirectory(prefix="telegram-recorder-tests-")
     atexit.register(_temporary.cleanup)
     _stub.DATABASE_FILE = os.path.join(_temporary.name, "test.db")
+    _stub.SESSION_DIR = os.path.join(_temporary.name, "sessions")
     _stub.OUTPUT_DIR = os.path.join(_temporary.name, "recordings")
     _stub.LOG_FILE = os.path.join(_temporary.name, "recorder.log")
     _stub.VIDEO_WIDTH = 1280

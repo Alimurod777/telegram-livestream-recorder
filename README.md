@@ -28,7 +28,8 @@ Buyruqlar har bir foydalanuvchi uchun tartib bilan bajariladi; boshqa
 foydalanuvchining sekin so‘rovi ularni kutib qolishga majbur qilmaydi.
 Sessiyalar, kanal tanlovi va yozuvlar foydalanuvchi bo‘yicha ajratilgan,
 fayllar `recordings/{user_id}/` ichida saqlanadi. Har foydalanuvchi bir vaqtda
-bitta yozuv boshlashi mumkin; umumiy parallel yozuvlar soni serverning
+o‘zining turli Telegram akkauntlari orqali bir nechta efir yozishi mumkin;
+bitta akkaunt faqat bitta faol efirga ajratiladi; umumiy parallel yozuvlar soni serverning
 CPU, RAM, disk va internet imkoniyatlariga bog‘liq. Bitta bot tokeni uchun
 bitta polling jarayonini ishga tushiring.
 
@@ -98,3 +99,62 @@ python bot.py
 
 ## ⚠️ Important Note
 By default, the `recordings/` folder (where large media files are saved), `recorder.db` (your personal database), and `config.py` (your secret tokens) are **ignored** by `.gitignore`. This is to protect your privacy. The bot will automatically recreate the database and folders when you run it!
+
+### Log kanal, owner va obuna
+
+`tg-ytdlp-bot`dagi log yo‘naltirish/takrorlarni cheklash hamda `savebotnew`dagi
+request konteksti yondashuvi shu botning urllib + asyncio arxitekturasiga moslangan.
+`.env.example`da yangi sozlamalar bor:
+
+- `LOG_CHANNEL_ID`: xato va ogohlantirishlar yuboriladigan kanal yoki guruh.
+  Nol bo‘lsa `LOGS_ID`, undan keyin `LOG_EXCEPTION` olinadi.
+- `OWNER_ID`: log manziliga yuborish muvaffaqiyatsiz bo‘lsa, bot ownerga yozadi.
+  Owner avval botga `/start` yuborgan bo‘lishi kerak.
+- `LOG_DEDUP_SECONDS=120`: bir xil xabar va user/komanda uchun takroriy hisobot oralig‘i.
+- `FORCE_SUB_ENABLED=true`, `SUBSCRIBE_CHANNEL=-100...` yoki `@username`,
+  `SUBSCRIBE_CHANNEL_URL=https://t.me/...`: majburiy obuna va tekshirish tugmasi.
+  Bot kanal a’zoligini tekshira olishi uchun kanal administratori bo‘lishi kerak.
+  Obunani tekshirish xatosi ruxsat bermaydi; `/stop`, `/status`, `/logout`,
+  `/cancel`, `/help` ishlashda davom etadi. Owner obuna tekshiruvidan ozod.
+
+`/join @kanal` yoki `/join https://t.me/+taklif` login qilingan akkauntni
+kanal/guruhga a’zo qiladi. Tasdiq talab qilinadigan taklifda so‘rov holati aytiladi;
+keyin `/target` yoki `/record` bilan kerakli chat tanlanadi.
+
+Bitta Telegram akkaunt bir vaqtda faqat **bitta chat efirini** yozadi.
+Bu cheklov ikki xil session/client bir Telegram IDga tegishli bo‘lganda ham,
+zaxira akkauntga o‘tishda ham tekshiriladi. ENV orqali limit oshirilmaydi.
+
+### Xatoni topish
+
+Telegram hisobotidagi `incident=...`ni `recorder.log`dan qidiring:
+`rg 'incident=ID' recorder.log*`. Hisobotda vaqt, kategoriya, user/update/komanda,
+modul/qator va mavjud traceback bor. `rate_limit`, `session`, `network`,
+`access`, `media`, `unexpected` kategoriyalari dastlabki saralash uchun;
+aniq sabab traceback va recording/FFmpeg loglari orqali tekshiriladi.
+Token, session string, parol va proxy loginlari Telegramga yuborilishdan oldin
+maskalanadi. Hisobot navbati cheklangan; navbat to‘lsa yoki Telegramga yuborish
+ishlamasa, asl loglar lokal diskda qoladi. Topilgan sabab/yechimlar `BUGS.md`ga yoziladi.
+
+Sozlamalar va kod o‘zgarishlari bot qayta ishga tushganda kuchga kiradi.
+
+### Bir foydalanuvchi — bir nechta parallel efir
+
+Asosiy akkauntga login qiling va `/addaccount <session> [label]` bilan ikkinchi
+akkauntni qo‘shing. So‘ng `/record @birinchi_kanal`, undan keyin
+`/record @ikkinchi_kanal` yuboring. Asosiy akkaunt band bo‘lsa, ikkinchi yozuv
+bo‘sh qo‘shimcha akkaunt orqali boshlanadi. Har bir akkaunt o‘sha kanalga kira
+olishi kerak. Kerak bo‘lsa `/join @kanal --account 2` orqali qo‘shiling.
+`/record @kanal --account 2` bilan aynan shu akkauntni tanlash ham mumkin;
+`2` — `/accounts` ko‘rsatadigan ID.
+
+`/status` barcha yozuvlar va IDlarini ko‘rsatadi. `/stop -100...` yoki `/stop #42`
+faqat tanlangan yozuvni to‘xtatadi. `/send -100...` yoki `/send #42` uning nusxasini
+jo‘natib, yozishni davom ettiradi. `/stop all` va `/send all` o‘zingizning barcha
+yozuvlaringiz uchun ishlaydi. Bir nechta yozuv bo‘lsa, argumentsiz komanda tanlash
+ro‘yxatini ko‘rsatadi. Har yozuvning progress xabarida o‘z komandasi beriladi.
+
+Bitta kutilayotgan efirni `/stop waiting` bilan bekor qilish mumkin; boshqa faol
+parallel yozuvlar davom etadi. Bo‘sh akkaunt qolmasa, yangi yozuv boshlanmaydi va
+ishlayotgan yozuvlarga ta’sir qilmaydi. Boshqa AI yordamchilar uchun amaldagi
+arxitektura va cheklovlar `AGENTS.md` / `agents.md`da yozilgan.

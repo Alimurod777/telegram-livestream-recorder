@@ -160,9 +160,10 @@ Standart Bot API da fayl o'lchami 50 MB.
 Local Bot API server o'rnatilsa 2 GB gacha.
 `config.py` da `BOT_API_BASE_URL` o'zgartirilsa avtomatik ishlaydi.
 
-### P-004: Bir vaqtda bir user — bir recording
-Har bir foydalanuvchi faqat bitta aktiv recording sessiyasiga ega bo'lishi mumkin.
-`stream_recorder.is_recording(user_id)` — tekshirish.
+### P-004: Bir akkaunt — bir efir; bir owner — ko‘p akkaunt/efir (2026-11-03)
+Bitta owner turli Telegram akkauntlari orqali parallel efirlar yozadi.
+Active session kaliti `(owner_user_id, channel_id)`. Eski bir-user/bir-recording
+cheklovi bekor qilingan; faqat Telegram akkaunt IDsi bo‘yicha cheklov qolgan.
 
 ### P-005: PyTgCalls bir bot instance
 `call_clients[user_id]` — har foydalanuvchi uchun alohida `PyTgCalls(client)` instance.
@@ -191,3 +192,63 @@ Agar foydalanuvchi logout qilsa va qayta login qilsa, yangi instance yaratiladi.
 - [ ] `/record` komandasiga `--audio-only` flag
 - [ ] Yozib olish davomida progress xabar (har 5 daqiqada)
 - [ ] Kanal jonli efir tugashini `CLOSED_VOICE_CHAT` orqali avtomatik stop
+
+### Log kanal, obuna va akkaunt cheklovi (2026-11-03)
+- `tg-ytdlp-bot/HELPERS/logger.py` va `CONFIG/env_config.py`: kanal tanlash,
+  dedup va .env sozlamalari o‘rganildi. `savebotnew/core/structured_log.py`,
+  `request_context.py`, `error_handler.py` va BUGS.md: kontekst/traceback va
+  sabab-yechim orqali diagnostika yondashuvi moslashtirildi.
+- `livestream/diagnostics.py`: log kanal/guruh birinchi, owner DM fallback;
+  bounded queue, dedup, redaction, incident ID va background exception hook.
+- `livestream/subscription.py`: ENV majburiy obuna, qayta tekshirish tugmasi;
+  `/stop`, `/status`, `/logout`, `/cancel`, `/help` obunasiz ham ishlaydi.
+- `/join` public/private invite va admin tasdig‘ini kutish holatini qo‘llaydi.
+- Akkaunt limiti qat’iy 1; Telegram ID bo‘yicha start/failover tekshiruvi bor.
+- Yangi ENV kalitlar manba loyihadagi log/owner/obuna sozlamalaridan qo‘shildi.
+  Bot token, API ma’lumotlari va sessiyalar ko‘chirilmagan.
+- Topilgan buglar va regression tekshiruvlar `BUGS.md`da.
+- Tekshiruv: `venv/bin/python -m unittest discover -s tests -t .` — 94 test,
+  81 o‘tdi, FFmpeg/FFprobe PATHda yo‘qligi uchun 13 pipeline test skip.
+  Test harnessga vaqtinchalik SESSION_DIR qo‘shildi (production sessiyalardan izolyatsiya).
+  ENV konfiguratsiyasi va `git diff --check` muvaffaqiyatli.
+  Ishlayotgan bot restart qilinmadi; haqiqiy kanal/ownerga test xabar yuborilmadi.
+
+### Bir owner uchun parallel efirlar va AI yo‘riqnomalari (2026-11-03)
+- User aniqlashtirdi: bitta owner ikki yoki ko‘p akkaunt kiritgan bo‘lsa, har
+  akkaunt bilan alohida efirni bir vaqtda yozishi kerak. Bir akkaunt limiti 1.
+- `active_sessions` va `_stop_tasks`: `(owner_user_id, channel_id)` kalitlari;
+  `get_sessions(owner)` barcha yozuvlar; ambiguous `get_session(owner)` None.
+- Barcha call-ended/timer/watchdog/shutdown va finalizatsiya exact yozuvga tegishli.
+  Own akkaunt band bo‘lsa owned poolga o‘tiladi. Private chat accessni pooldan
+  resolve qilish va `--account ID` orqali record/join tanlash qo‘shildi.
+- `/status` barcha yozuvlar; `/stop|send <chat ID|#recording ID|all>` tanlash;
+  argumentsiz ko‘p yozuv holatida ro‘yxat, avtomatik birinchi yozuv tanlanmaydi.
+- Bitta pending start/kutish cheklovi aktiv yozuvlar soni cheklovi emas.
+  Kutish record bilan parallel ishlaydi; optional account ID DBda saqlanadi.
+- AGENTS.md qo‘shildi, agents.md yangilandi, claude.md umumiy hujjatga yo‘naltirildi;
+  eski bir-user/bir-recording qoidasining bekor qilingani aniq yozildi.
+- Regression suite: 107 test, 94 passed, 13 FFmpeg-dependent skipped. Runtime
+  bot restart qilinmadi; Telegram testlari faqat mock bilan ishlaydi.
+
+### Parallel lifecycle cancellation audit (2026-11-03)
+- Davom etish so‘roviga binoan failover va stop/start poyga holatlari tekshirildi.
+- `recover_recording_account` eski akkauntni oldindan free qilmaydi. Callback
+  cancellationda yangi reservationni qaytaradi; recorder call-client tayyorlash
+  va identity adoption uchun javobgar, eski reservation faqat adopt bo‘lgach free.
+- Capture muvaffaqiyatidan keyingi status cancellation active reservationni free
+  qilmaydi. `/stop all` pending start/probe cancelini kutib sessionlarni qayta o‘qiydi.
+- `_stop_tasks` endi `id(session)` bilan indekslanadi (avvalgi tuple-key haqidagi
+  yozuv superseded): eski upload yangi shu-chat yozuvining stopini bloklamaydi.
+  Shield caller canceli registry entryni olib tashlamaydi; done callback tozalaydi.
+- `tests/test_lifecycle_races.py`: 9 yangi regression test. To‘liq suite 116 test:
+  103 passed, 13 FFmpeg-dependent skipped; `git diff --check` toza.
+- Amaldagi qoida va reservation transfer shartlari agents.mdga yozildi.
+  Bot restart qilinmadi va haqiqiy Telegram kanaliga test xabar yuborilmadi.
+
+### GitHub uchun konfiguratsiya namunasi (2026-11-03)
+- User ENV namunasi bilan o‘zgarishlarni GitHubga push qilishni so‘radi.
+- `.env.example` barcha 31 ta amaldagi os.getenv kalitini hujjatlashtiradi:
+  login credentials, log/owner, obuna, Bot API/MTProto limitlari, recording sifati,
+  davomiylik/disk, Mongo va session storage. Maxfiy maydonlar bo‘sh.
+- `.gitignore`: ENV variantlari, virtual muhit, yangi loglar va lokal error dump
+  himoyalangan; `.env.example` istisno. Oldin tracked runtime loglar commitga qo‘shilmaydi.

@@ -40,7 +40,8 @@ class EventHandler:
         self._fps_windows: dict = {}
         self._last_restart: dict = {}
 
-    async def handle_update(self, user_id: int, update) -> None:
+    async def handle_update(self, user_id, update) -> None:
+        # user_id is the recording key (owner, channel); legacy fixtures use int.
         session = self.recorder.active_sessions.get(user_id)
         if not session or session.finalizing:
             return

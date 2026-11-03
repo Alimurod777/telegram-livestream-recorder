@@ -296,7 +296,7 @@ class BotRegressionTests(unittest.IsolatedAsyncioTestCase):
 
         with patch.object(self.bot, "send_message", new=AsyncMock(side_effect=slow_send)), patch.object(
             self.bot, "stop_recording_background", new=AsyncMock(side_effect=stop)
-        ), patch.object(self.bot.stream_recorder, "is_recording", return_value=True):
+        ), patch.object(self.bot.stream_recorder, "get_sessions", return_value=[SimpleNamespace(channel_id=-10042)]):
             task = asyncio.create_task(self.bot.handle_stop(987, 987))
             try:
                 await asyncio.wait_for(send_started.wait(), 1)

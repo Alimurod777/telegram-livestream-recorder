@@ -62,6 +62,18 @@ RecoveryCallback = Callable[
 ]
 
 
+def _recovery_media_snapshot(manifest: str) -> dict:
+    """Track retained media so failed recovery retries only after files change."""
+    stem = manifest.removesuffix(".recording.json")
+    snapshot = {}
+    for path in sorted(glob.glob(glob.escape(stem) + ".*")):
+        if not path.endswith((".mka", ".mkv", ".mp4", ".m4a")):
+            continue
+        stat = os.stat(path)
+        snapshot[os.path.basename(path)] = [stat.st_size, stat.st_mtime_ns]
+    return snapshot
+
+
 class RecordingSession:
     """Holds all state for a single recording session."""
 
@@ -186,7 +198,8 @@ class StreamRecorder:
     """Singleton recorder that manages all active recording sessions."""
 
     def __init__(self):
-        self.active_sessions: Dict[int, RecordingSession] = {}
+        # Owner and recording identity are separate: one owner may record many chats.
+        self.active_sessions: Dict[Tuple[int, int], RecordingSession] = {}
         # PyTgCalls cache keyed by id(client): a shared pool account client
         # is reused across users instead of double-wrapping.
         self.call_clients: Dict[int, PyTgCalls] = {}
@@ -198,6 +211,7 @@ class StreamRecorder:
         self._part_callback: Optional[PartCallback] = None
         self._recovery_callback: Optional[RecoveryCallback] = None
         self._state_lock = asyncio.Lock()
+        # Finalization can outlive capture while a new recording reuses the chat.
         self._stop_tasks: Dict[int, asyncio.Task] = {}
         self._event_handler = EventHandler(self)
         self._loop: Optional[asyncio.AbstractEventLoop] = None
@@ -227,11 +241,31 @@ class StreamRecorder:
 
     # ── Session queries (called by bot.py) ───────────────────────────────
 
-    def is_recording(self, user_id: int) -> bool:
-        return user_id in self.active_sessions
+    def get_sessions(self, user_id: int) -> List[RecordingSession]:
+        return [session for key, session in self.active_sessions.items()
+                if (key[0] if isinstance(key, tuple) else key) == user_id]
 
-    def get_session(self, user_id: int) -> Optional[RecordingSession]:
-        return self.active_sessions.get(user_id)
+    def is_recording(self, user_id: int) -> bool:
+        return bool(self.get_sessions(user_id))
+
+    def get_session(self, user_id, channel_id: Optional[int] = None) -> Optional[RecordingSession]:
+        if isinstance(user_id, tuple):
+            return self.active_sessions.get(user_id)
+        sessions = self.get_sessions(user_id)
+        if channel_id is not None:
+            return next((s for s in sessions if s.channel_id == channel_id), None)
+        # Never silently pick one of several recordings for /stop or /send.
+        return sessions[0] if len(sessions) == 1 else None
+
+    def _session_key(self, session):
+        return next((key for key, value in self.active_sessions.items() if value is session), session.user_id)
+
+    def account_is_busy(self, client, exclude=None) -> bool:
+        identity = getattr(getattr(client, "me", None), "id", None)
+        return any(other is not exclude and (
+            other.client is client or (identity is not None and identity ==
+            getattr(getattr(other.client, "me", None), "id", None))
+        ) for other in self.active_sessions.values())
 
     def mark_delivered(self, session: RecordingSession) -> None:
         """Mark a session as delivered and clean up temp files."""
@@ -369,7 +403,7 @@ class StreamRecorder:
     ) -> RecordingSession:
         self._loop = asyncio.get_running_loop()
         async with self._state_lock:
-            current = self.active_sessions.get(user_id)
+            current = self.get_session(user_id, int(channel_id))
             if current:
                 return current
             identity = getattr(getattr(client, "me", None), "id", None)
@@ -378,9 +412,7 @@ class StreamRecorder:
             if any(same_account(s.client) and s.channel_id == int(channel_id)
                    for s in self.active_sessions.values()):
                 raise RuntimeError("This account is already recording this chat")
-            if sum(same_account(s.client) for s in self.active_sessions.values()) >= max(
-                1, int(getattr(_config, "MAX_RECORDINGS_PER_ACCOUNT", 1))
-            ):
+            if self.account_is_busy(client):
                 raise RuntimeError("Account recording capacity reached; use another account")
 
             session = RecordingSession(user_id, int(channel_id), channel_title)
@@ -390,7 +422,7 @@ class StreamRecorder:
             session.recording_id = await asyncio.to_thread(
                 db.start_recording, user_id, int(channel_id), channel_title, is_video
             )
-            self.active_sessions[user_id] = session
+            self.active_sessions[(user_id, int(channel_id))] = session
             session.uploader.write_manifest()
 
         session.muxer.set_part_callback(
@@ -433,7 +465,8 @@ class StreamRecorder:
             if isinstance(exc, asyncio.CancelledError):
                 logger.info("Recording start cancelled: user=%s chat=%s", user_id, channel_id)
             else:
-                logger.exception("Could not start recording")
+                logger.exception("Could not start recording user=%s chat=%s account=%s recording=%s",
+                                 user_id, channel_id, account_id, session.recording_id)
             session.state_machine.transition(RecorderState.ERROR)
             session.error = str(exc) or "Recording start cancelled"
             session.status = "failed"
@@ -448,7 +481,7 @@ class StreamRecorder:
             session.muxer.close_logs()
             self._event_handler.forget(session)
             async with self._state_lock:
-                self.active_sessions.pop(user_id, None)
+                self.active_sessions.pop(self._session_key(session), None)
 
             await asyncio.to_thread(
                 db.finish_recording,
@@ -534,7 +567,7 @@ class StreamRecorder:
                 minimum = int(getattr(_config, "MIN_FREE_DISK_BYTES", 2_000_000_000))
                 if free.free < minimum:
                     await self._notify(session.user_id, "Recording stopped: insufficient disk space. Completed segments are retained for delivery.")
-                    asyncio.create_task(self.stop_recording(session.user_id, reason="disk space limit"))
+                    asyncio.create_task(self.stop_recording(self._session_key(session), reason="disk space limit"))
                     return
                 size, now = session.pending_bytes(), time.monotonic()
                 rate = max(0, size - previous_bytes) / max(now - previous_time, 0.01)
@@ -593,8 +626,8 @@ class StreamRecorder:
 
     async def _duration_limit_loop(self, session: RecordingSession) -> None:
         await asyncio.sleep(MAX_RECORDING_SECONDS)
-        if self.get_session(session.user_id) is session and not session.finalizing:
-            asyncio.create_task(self.stop_recording(session.user_id, reason="4 hour recording limit"))
+        if session in self.get_sessions(session.user_id) and not session.finalizing:
+            asyncio.create_task(self.stop_recording(self._session_key(session), reason="4 hour recording limit"))
 
     # ── Watchdog ─────────────────────────────────────────────────────────
 
@@ -626,7 +659,7 @@ class StreamRecorder:
         if ended and not session.finalizing:
             logger.info("Telegram confirmed stream ended: user=%s chat=%s", session.user_id, session.channel_id)
             # A separate task survives cancellation of this watchdog during stop.
-            asyncio.create_task(self.stop_recording(session.user_id, reason="Telegram stream ended"))
+            asyncio.create_task(self.stop_recording(self._session_key(session), reason="Telegram stream ended"))
         return ended
 
     async def _watchdog_loop(self, session: RecordingSession, is_video: bool) -> None:
@@ -714,14 +747,35 @@ class StreamRecorder:
                 if not replacement:
                     break
                 client, account_id = replacement
-                old_call_client = session.call_client
-                if old_call_client:
-                    await self._leave_call(old_call_client, session.channel_id)
-                session.client = client
-                session.account_id = account_id
-                session.call_client = await self._get_call_client(
-                    session.user_id, client
-                )
+                from livestream.accounts import account_manager
+                adopted = False
+                previous_id = session.account_id
+                try:
+                    if getattr(session, "finalizing", False):
+                        break
+                    old_call_client = session.call_client
+                    if old_call_client:
+                        await self._leave_call(old_call_client, session.channel_id)
+                    if getattr(session, "finalizing", False) or self.account_is_busy(client, exclude=session):
+                        last_error = RuntimeError("Replacement account recording capacity reached or recording stopped")
+                        break
+                    # Preparation may fail or be cancelled. Keep the old session's
+                    # identity until the replacement is ready and capacity rechecked.
+                    new_call_client = await self._get_call_client(session.user_id, client)
+                    async with self._state_lock:
+                        if not getattr(session, "finalizing", False) and not self.account_is_busy(client, exclude=session):
+                            session.client = client
+                            session.account_id = account_id
+                            session.call_client = new_call_client
+                            adopted = True
+                    if not adopted:
+                        last_error = RuntimeError("Replacement account recording capacity reached or recording stopped")
+                        break
+                    if previous_id is not None:
+                        account_manager.mark_free(previous_id)
+                finally:
+                    if not adopted and account_id is not None:
+                        account_manager.mark_free(account_id)
         logger.error(
             "Rejoin failed for user %s chat=%s: %s",
             session.user_id, session.channel_id, last_error,
@@ -732,20 +786,27 @@ class StreamRecorder:
     async def stop_recording(
         self, user_id: int, reason: str = "manual"
     ) -> Optional[RecordingSession]:
-        existing = self._stop_tasks.get(user_id)
+        session = self.get_session(user_id)
+        if not session:
+            return None
+        key = id(session)
+        existing = self._stop_tasks.get(key)
         if existing:
             return await asyncio.shield(existing)
 
-        session = self.active_sessions.get(user_id)
-        if not session:
-            return None
-
         task = asyncio.create_task(self._finalize_session(session, reason))
-        self._stop_tasks[user_id] = task
-        try:
-            return await asyncio.shield(task)
-        finally:
-            self._stop_tasks.pop(user_id, None)
+        self._stop_tasks[key] = task
+
+        def finished(done):
+            if self._stop_tasks.get(key) is done:
+                self._stop_tasks.pop(key, None)
+            if not done.cancelled() and done.exception() is not None:
+                error = done.exception()
+                logger.error("Recording stop task failed user=%s chat=%s", session.user_id,
+                             session.channel_id, exc_info=(type(error), error, error.__traceback__))
+
+        task.add_done_callback(finished)
+        return await asyncio.shield(task)
 
     async def _finalize_session(
         self, session: RecordingSession, reason: str
@@ -778,7 +839,8 @@ class StreamRecorder:
             session.status = "completed"
 
         except Exception as exc:
-            logger.exception("Finalization failed for user %s", session.user_id)
+            logger.exception("Finalization failed user=%s chat=%s account=%s recording=%s",
+                             session.user_id, session.channel_id, getattr(session, "account_id", None), session.recording_id)
             try:
                 await asyncio.to_thread(session.muxer.close_all)
             except Exception:
@@ -809,7 +871,7 @@ class StreamRecorder:
             )
 
             async with self._state_lock:
-                self.active_sessions.pop(session.user_id, None)
+                self.active_sessions.pop(self._session_key(session), None)
 
         if self._completion_callback:
             try:
@@ -849,6 +911,10 @@ class StreamRecorder:
                             continue
                         with open(manifest, "r", encoding="utf-8") as f:
                             data = json.load(f)
+                        if (not any(data.get(key) for key in ("archive_files", "output_files", "uploaded_parts"))
+                                and data.get("unrecoverable_inputs") == _recovery_media_snapshot(manifest)):
+                            logger.debug("Skipping unchanged unrecoverable recording: %s", manifest)
+                            continue
                         logger.info("Recovering orphaned recording: %s", manifest)
                         session = RecordingSession(int(data["user_id"]), int(data["channel_id"]), data["channel_title"])
                         session.recording_id = data.get("recording_id", -1)
@@ -878,7 +944,15 @@ class StreamRecorder:
                         session.output_sizes = {row["path"]: row.get("size") or 0 for row in data.get("output_files", [])}
                         session.is_video = bool(data.get("is_video"))
                         if not session.archive_files and not session.output_files and not session.uploaded_parts:
-                            logger.warning("No recoverable media; retained manifest %s", manifest)
+                            data["unrecoverable_inputs"] = _recovery_media_snapshot(manifest)
+                            temporary = manifest + ".tmp"
+                            with open(temporary, "w", encoding="utf-8") as f:
+                                json.dump(data, f, indent=2)
+                                f.flush()
+                                os.fsync(f.fileno())
+                            os.replace(temporary, manifest)
+                            logger.warning("No recoverable media; retained files and manifest %s; "
+                                           "recovery will retry if media files change", manifest)
                             continue
                         session.finalizing = True
                         remaining_raw = glob.glob(os.path.join(session.muxer.output_dir, f"{session.muxer.stem}.e*.mkv")) + glob.glob(os.path.join(session.muxer.output_dir, f"{session.muxer.stem}.e*.mka"))

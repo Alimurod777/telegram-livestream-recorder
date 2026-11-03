@@ -48,6 +48,8 @@ from database import db
 from ffmpeg_helper import get_ffmpeg_path, get_ffprobe_path, extract_video_thumbnail
 from livestream.accounts import account_manager
 from livestream.dispatcher import UserUpdateDispatcher
+from livestream.diagnostics import TelegramDiagnostics, request_context, sanitize
+from livestream.subscription import SubscriptionGate
 from livestream.mtproto_uploader import mtproto_uploader
 from livestream.metadata import media_kind
 from stream_recorder import RecordingSession, stream_recorder
@@ -88,22 +90,25 @@ HELP_TEXT = (
     "/login - telefon orqali login (/login\\_phone bilan bir xil)\n"
     "/login\\_session <session string> - tayyor session string bilan login qiladi\n"
     "/target <username|id|link> - record qilinadigan kanal yoki chatni saqlaydi\n"
-    "/record [ID|username|link] - guruh yoki kanal efirini yozadi (efir boshlanmagan bolsa "
+    "/join <@username|taklif havolasi> [--account ID] - tanlangan akkauntni kanalga a’zo qiladi\n"
+    "/record [ID|username|link] [--account ID] - bo‘sh akkaunt orqali yana bir efirni yozadi (efir boshlanmagan bolsa "
     "kutish rejimi taklif qilinadi)\n"
     "Masalan: `/record -1001234567890` yoki `/record https://t.me/channel?livestream`\n"
-    "/send - argumentsiz yuboring: hozirgi yozuv nusxasini yuboradi va yozishda davom etadi\n"
-    "/stop - to‘xtatadi; oxirgi avtomatik bo‘lakdan keyingi yozuvni birlashtirib yuboradi\n"
-    "/status - login, target va recording holatini korsatadi\n"
+    "/send [chat ID|#yozuv ID|all] - nusxani yuboradi, yozish davom etadi\n"
+    "/stop [chat ID|#yozuv ID|all] - tanlangan yozuvni to‘xtatib yuboradi\n"
+    "/stop waiting - kutish rejimini bekor qiladi\n"
+    "/status - barcha faol yozuvlar va ularning IDlarini ko‘rsatadi\n"
     "/accounts - akkauntlar havzasini korish\n"
     "/addaccount <session string> [label] - zaxira akkaunt qoshadi "
-    "(FloodWait da avtomatik failover)\n"
+    "(parallel efirlar va FloodWait uchun)\n"
     "/delaccount <id> - zaxira akkauntni ochiradi\n"
     "/logout - saqlangan sessionni ochiradi\n"
     "/cancel - kutilayotgan login jarayonini bekor qiladi\n\n"
     "*Hozirgi holat*\n"
     "Backend: py-tgcalls / ntgcalls\n"
     "Media capture: audio + video (native sifatda)\n"
-    "Chegara: 4 soat. Holat xabari har 5 soniyada yangilanadi.\n"
+    "Bir akkaunt — bir efir. Bir user bir nechta akkaunt bilan parallel efir yozadi.\n"
+    "Chegara: har yozuv uchun 4 soat. Holat har 5 soniyada yangilanadi.\n"
     "~1.97 GB ga yaqin qism avtomatik yuboriladi, yakunda qayta qo‘shilmaydi.\n"
     "Chegaraga yetmasa, /send nusxasi bilan qolgan yozuv yakunda bitta fayl qilinadi.\n"
     "Video yozuv video va alohida audio sifatida yuboriladi.\n"
@@ -656,10 +661,10 @@ def attach_user_client_handlers(user_id: int, client: Client) -> None:
             return
 
         if ended is not None:
-            session = stream_recorder.get_session(user_id)
+            session = stream_recorder.get_session(user_id, int(message.chat.id))
             if session and session.channel_id == int(message.chat.id):
                 track_background_task(asyncio.create_task(
-                    stream_recorder.stop_recording(user_id, reason="livestream ended")
+                    stream_recorder.stop_recording(stream_recorder._session_key(session), reason="livestream ended")
                 ))
             return
 
@@ -685,6 +690,7 @@ def attach_user_client_handlers(user_id: int, client: Client) -> None:
                 channel_id=channel_id,
                 channel_title=title,
                 automatic=True,
+                initial_account_id=waiting.get("account_id"),
             )
             if waiting_sessions.get(user_id) is waiting:
                 waiting_sessions.pop(user_id, None)
@@ -704,12 +710,12 @@ def attach_user_client_handlers(user_id: int, client: Client) -> None:
     async def group_call_update(_: Client, update, users, chats) -> None:
         if not isinstance(update, raw.types.UpdateGroupCall):
             return
-        session = stream_recorder.get_session(user_id)
         if isinstance(update.call, raw.types.GroupCallDiscarded):
-            if session and getattr(session, "telegram_call_id", None) == update.call.id:
-                track_background_task(asyncio.create_task(
-                    stream_recorder.stop_recording(user_id, reason="group call discarded")
-                ))
+            for session in stream_recorder.get_sessions(user_id):
+                if session.client is client and getattr(session, "telegram_call_id", None) == update.call.id:
+                    track_background_task(asyncio.create_task(
+                        stream_recorder.stop_recording(stream_recorder._session_key(session), reason="group call discarded")
+                    ))
             return
         waiting = waiting_sessions.get(user_id)
         if not waiting or getattr(update.call, "schedule_date", None):
@@ -728,6 +734,7 @@ def attach_user_client_handlers(user_id: int, client: Client) -> None:
             await start_recording_for_user(
                 user_id, waiting["chat_id"], client, chat_id,
                 waiting["title"], automatic=True,
+                initial_account_id=waiting.get("account_id"),
             )
             if waiting_sessions.get(user_id) is waiting:
                 waiting_sessions.pop(user_id, None)
@@ -974,8 +981,12 @@ def parse_channel_input(text: str):
         match = re.search(r"t\.me/([^/?]+)", text)
         if match:
             username = match.group(1)
-            if username.startswith("+"):
+            if username.startswith("+") or username == "joinchat":
                 return text
+            if username == "c":
+                private = re.search(r"t\.me/c/(\d+)", text)
+                if private:
+                    return int("-100" + private.group(1))
             return username if username.startswith("@") else f"@{username}"
     if text.lstrip("-").isdigit():
         return int(text)
@@ -1032,6 +1043,7 @@ async def start_recording_for_user(
     channel_title: str,
     automatic: bool = False,
     known_call: Any = None,
+    initial_account_id: Optional[int] = None,
 ) -> RecordingSession:
     """Start a recording, failing over to pool accounts on FloodWait/errors.
 
@@ -1041,7 +1053,7 @@ async def start_recording_for_user(
     """
     lock = user_client_locks.setdefault(user_id, asyncio.Lock())
     async with lock:
-        current = stream_recorder.get_session(user_id)
+        current = stream_recorder.get_session(user_id, channel_id)
         if current:
             return current
 
@@ -1049,6 +1061,12 @@ async def start_recording_for_user(
         last_exc: Optional[Exception] = None
         candidate_client: Optional[Client] = client
         account_id: Optional[int] = None
+        if initial_account_id is not None:
+            reserved = await account_manager.reserve_account(user_id, initial_account_id)
+            if not reserved:
+                raise RuntimeError("Tanlangan akkaunt band, cheklangan yoki sizga tegishli emas")
+            candidate_client, account_id = reserved
+            tried_accounts.add(account_id)
 
         while candidate_client is not None:
             try:
@@ -1068,19 +1086,12 @@ async def start_recording_for_user(
                     account_id=account_id,
                     telegram_call_id=call.id,
                 )
-                user_states[user_id] = UserState.RECORDING
-                session._progress_task = track_background_task(asyncio.create_task(recording_progress(session)))
-                if automatic:
-                    await send_message(
-                        chat_id,
-                        f"Live stream detected in {channel_title}.\n"
-                        "Recording started automatically.",
-                    )
-                return session
-            except Exception as exc:
+            except (Exception, asyncio.CancelledError) as exc:
                 last_exc = exc
                 if account_id is not None:
                     account_manager.mark_free(account_id)
+                if isinstance(exc, asyncio.CancelledError):
+                    raise
                 text = str(exc).lower()
                 flood_like = isinstance(exc, FloodWait) or any(
                     key in text for key in ("flood", "too many requests")
@@ -1088,7 +1099,7 @@ async def start_recording_for_user(
                 membership_error = any(
                     key in text
                     for key in (
-                        "peer", "participant", "forbidden", "channel_invalid",
+                        "peer", "participant", "forbidden", "channel_invalid", "channel_private",
                         "chat_admin_required", "user_banned",
                         "capacity reached", "already recording this chat",
                         "auth_key_unregistered", "session_revoked", "session_expired", "user_deactivated",
@@ -1106,6 +1117,17 @@ async def start_recording_for_user(
                     account_id or "own session", user_id, exc,
                 )
 
+            else:
+                user_states[user_id] = UserState.RECORDING
+                session._progress_task = track_background_task(asyncio.create_task(recording_progress(session)))
+                if automatic:
+                    await send_message(
+                        chat_id,
+                        f"Live stream detected in {channel_title}.\n"
+                        "Recording started automatically.",
+                    )
+                return session
+
             pool = await account_manager.pick_account(user_id, exclude=tried_accounts)
             if not pool:
                 break
@@ -1118,25 +1140,37 @@ async def start_recording_for_user(
 async def recover_recording_account(
     session: RecordingSession, exc: Exception
 ) -> Optional[tuple[Client, Optional[int]]]:
-    """Select a healthy replacement without interrupting media encoders."""
+    """Return a reserved replacement; recorder releases old account on adoption.
+
+    Before returning, this callback owns cleanup of the new reservation.
+    After returning, StreamRecorder owns cleanup/adoption of that reservation.
+    """
     previous_id = session.account_id
     if previous_id is not None:
         account_manager.mark_flood(previous_id, _flood_seconds(exc), str(exc))
     exclude = {previous_id} if previous_id is not None else set()
     while replacement := await account_manager.pick_account(session.user_id, exclude=exclude):
         client, account_id = replacement
+        identity = getattr(getattr(client, "me", None), "id", None)
+        if any(other is not session and (
+            other.client is client or (identity is not None and identity ==
+            getattr(getattr(other.client, "me", None), "id", None))
+        ) for other in stream_recorder.active_sessions.values()):
+            account_manager.mark_free(account_id)
+            exclude.add(account_id)
+            continue
         try:
             await resolve_chat(client, session.channel_id)
-        except Exception as resolve_error:
+        except (Exception, asyncio.CancelledError) as resolve_error:
             account_manager.mark_free(account_id)
+            if isinstance(resolve_error, asyncio.CancelledError):
+                raise
             if isinstance(resolve_error, FloodWait):
                 account_manager.mark_flood(
                     account_id, _flood_seconds(resolve_error), str(resolve_error)
                 )
             exclude.add(account_id)
             continue
-        if previous_id is not None:
-            account_manager.mark_free(previous_id)
         logger.info(
             "Recording user=%s chat=%s failover account=%s -> %s",
             session.user_id, session.channel_id, previous_id, account_id,
@@ -1298,7 +1332,8 @@ def progress_text(session: RecordingSession) -> str:
     return (f"🔴 {session.channel_title}\n{state}\n"
             f"Yozuv boshlanganiga: {hours:02d}:{minutes:02d}:{seconds:02d}\n"
             f"Maksimal vaqt: 04:00:00\nJoriy qism: {session.pending_bytes() / 1_000_000:.1f} MB / ~1970 MB\n"
-            f"{media}\n/send — nusxani yuborish, davom etish\n/stop — tugatish")
+            f"{media}\nYozuv #{session.recording_id}\n"
+            f"/send {session.channel_id} — nusxani yuborish\n/stop {session.channel_id} — shu yozuvni tugatish")
 
 
 async def recording_progress(session: RecordingSession) -> None:
@@ -1383,12 +1418,13 @@ async def deliver_recording(session: RecordingSession) -> None:
         )
 
 
-async def stop_recording_background(user_id: int) -> None:
+async def stop_recording_background(user_id: int, channel_id: Optional[int] = None) -> None:
     try:
-        await stream_recorder.stop_recording(user_id, reason="manual command")
+        selector = (user_id, channel_id) if channel_id is not None else user_id
+        await stream_recorder.stop_recording(selector, reason="manual command")
     except Exception as exc:
         logger.exception("Could not stop recording for user %s", user_id)
-        user_states[user_id] = UserState.LOGGED_IN
+        user_states[user_id] = UserState.RECORDING if stream_recorder.is_recording(user_id) else UserState.LOGGED_IN
         await send_message(user_id, f"Could not finalize recording: {exc}")
 
 
@@ -1506,7 +1542,53 @@ async def handle_target(chat_id: int, user_id: int, text: str):
         db.set_target(user_id, chat.id, title, getattr(chat, "username", None))
         await send_message(chat_id, f"✅ Target saved: {title}")
     except Exception as exc:
+        logger.exception("Target resolution failed user=%s", user_id)
         await send_message(chat_id, f"❌ Could not set target: {exc}")
+
+
+def account_command_args(text: str):
+    args = text.split()[1:]
+    account_id = None
+    if "--account" in args:
+        index = args.index("--account")
+        if index != len(args) - 2 or not args[-1].isdigit():
+            raise ValueError("Akkaunt tanlash: --account <ID> (komanda oxirida)")
+        account_id = int(args[-1])
+        args = args[:index]
+    if len(args) > 1:
+        raise ValueError("Bitta chat havolasi yoki ID kiriting")
+    return (args[0] if args else None), account_id
+
+
+async def owned_account_client(user_id: int, account_id: int):
+    rows = await asyncio.to_thread(db.list_accounts, user_id)
+    if account_id not in {row["account_id"] for row in rows}:
+        raise ValueError("Bu akkaunt sizga tegishli emas")
+    client = await account_manager.get_client(account_id)
+    if not client:
+        raise RuntimeError("Akkauntga ulanib bo‘lmadi. /accounts orqali holatni tekshiring.")
+    return client
+
+
+async def handle_join(chat_id: int, user_id: int, text: str):
+    reference, account_id = account_command_args(text)
+    if not reference:
+        await send_message(chat_id, "Usage: /join <@username|https://t.me/+invite> [--account ID]")
+        return
+    client = await owned_account_client(user_id, account_id) if account_id is not None else await get_user_client(user_id)
+    if not client:
+        await send_message(chat_id, "Avval /login orqali akkauntingizga kiring.")
+        return
+    try:
+        chat = await client.join_chat(parse_channel_input(reference))
+        title = chat.title or str(chat.id)
+        await send_message(chat_id, f"✅ A’zo bo‘ldingiz: {title}. /target yoki /record bilan tanlang.")
+    except Exception as exc:
+        if type(exc).__name__ == "InviteRequestSent":
+            await send_message(chat_id, "Qo‘shilish so‘rovi yuborildi. Kanal administratori tasdiqlashini kuting.")
+            return
+        logger.exception("Channel join failed user=%s", user_id)
+        await send_message(chat_id, f"Kanalga qo‘shilib bo‘lmadi: {sanitize(exc, (BOT_TOKEN, API_HASH))}")
 
 
 async def get_channel_call(client: Client, chat) -> Any:
@@ -1527,20 +1609,21 @@ async def get_channel_call(client: Client, chat) -> Any:
 
 
 async def start_waiting_for_stream(
-    user_id: int, chat_id: int, channel_id: int, title: str
+    user_id: int, chat_id: int, channel_id: int, title: str, account_id: Optional[int] = None
 ) -> None:
     """Waiting mode: primary trigger is the VIDEO_CHAT_STARTED service
     message (event-driven); a slow probe is only a safety net in case the
     userbot misses the service update while reconnecting."""
-    if stream_recorder.is_recording(user_id) or user_id in waiting_sessions:
+    if stream_recorder.get_session(user_id, channel_id) or user_id in waiting_sessions:
         return
     waiting_sessions[user_id] = {
         "channel_id": channel_id,
         "title": title,
         "chat_id": chat_id,
         "task": None,
+        "account_id": account_id,
     }
-    await asyncio.to_thread(db.save_waiting, user_id, channel_id, title)
+    await asyncio.to_thread(db.save_waiting, user_id, channel_id, title, account_id)
     await send_message(
         chat_id,
         f"⏳ Waiting mode armed for *{title}*.\n"
@@ -1557,7 +1640,7 @@ async def wait_probe_loop(user_id: int, channel_id: int) -> None:
         waiting = waiting_sessions.get(user_id)
         if not waiting or waiting["channel_id"] != channel_id:
             return
-        if stream_recorder.is_recording(user_id):
+        if stream_recorder.get_session(user_id, channel_id):
             waiting_sessions.pop(user_id, None)
             await asyncio.to_thread(db.delete_waiting, user_id)
             return
@@ -1566,8 +1649,9 @@ async def wait_probe_loop(user_id: int, channel_id: int) -> None:
             await asyncio.sleep(WAIT_PROBE_INTERVAL)
             continue
         try:
-            chat = await resolve_chat(client, channel_id)
-            call = await get_channel_call(client, chat)
+            client, selected_account, chat, call = await resolve_record_target(
+                user_id, client, channel_id, waiting.get("account_id")
+            )
             if call is not None:
                 await send_message(
                     user_id,
@@ -1582,6 +1666,7 @@ async def wait_probe_loop(user_id: int, channel_id: int) -> None:
                     channel_title=waiting["title"],
                     automatic=False,
                     known_call=call,
+                    initial_account_id=selected_account,
                 )
                 if waiting_sessions.get(user_id) is waiting:
                     waiting_sessions.pop(user_id, None)
@@ -1639,59 +1724,69 @@ async def _record_with_retry(chat_id: int, user_id: int, text: str) -> None:
             record_requests.pop(user_id, None)
 
 
+async def resolve_record_target(user_id: int, own_client, reference, preferred_account=None):
+    """Resolve with an owned account that can access the target, without joining a call."""
+    if preferred_account is not None:
+        client = await owned_account_client(user_id, preferred_account)
+        chat = await resolve_chat(client, reference)
+        return client, preferred_account, chat, await get_channel_call(client, chat)
+    last_error = None
+    try:
+        chat = await resolve_chat(own_client, reference)
+        return own_client, None, chat, await get_channel_call(own_client, chat)
+    except Exception as exc:
+        last_error = exc
+    for row in await account_manager.healthy_accounts(user_id):
+        account_id = int(row["account_id"])
+        if account_manager._active.get(account_id, 0):
+            continue
+        client = await account_manager.get_client(account_id)
+        if not client:
+            continue
+        try:
+            chat = await resolve_chat(client, reference)
+            return client, account_id, chat, await get_channel_call(client, chat)
+        except Exception as exc:
+            last_error = exc
+            if isinstance(exc, FloodWait):
+                account_manager.mark_flood(account_id, _flood_seconds(exc), type(exc).__name__)
+    raise last_error or RuntimeError("No account can access this chat")
+
+
 async def _handle_record_once(chat_id: int, user_id: int, text: str):
-    if stream_recorder.is_recording(user_id):
-        await send_message(chat_id, "⚠️ Already recording. Use /stop first.")
-        return
-    if user_id in waiting_sessions:
-        await send_message(chat_id, "⚠️ Already waiting for a livestream. Use /stop to cancel.")
-        return
     client = await get_user_client(user_id)
     if not client:
         await send_message(chat_id, "⚠️ Not logged in. Use /login\\_qr or /login\\_phone.")
         return
-    args = text.split(maxsplit=1)
-    if len(args) > 1:
-        try:
-            chat = await resolve_chat(client, parse_channel_input(args[1]))
-            target = {
-                "id": int(chat.id),
-                "title": chat.title
-                or getattr(chat, "first_name", None)
-                or str(chat.id),
-            }
-        except FloodWait:
-            raise
-        except Exception as exc:
-            await send_message(chat_id, f"Could not resolve that channel: {exc}")
-            return
-    else:
+    reference, initial_account_id = account_command_args(text)
+    if reference is None:
         target = db.get_target(user_id)
-        chat = SimpleNamespace(id=target["id"]) if target else None
-    if not target:
-        await send_message(chat_id, "⚠️ Set a target first with /target <channel>.")
-        return
-    channel_id = int(target["id"])
-    title = target.get("title") or str(channel_id)
-
-    # Is there an active or scheduled group call right now?
-    live_call = None
-    try:
-        live_call = await get_channel_call(client, chat)
-    except FloodWait:
-        raise
-    except Exception as exc:
-        await send_message(chat_id, f"Could not check the livestream: {exc}")
+        if not target:
+            await send_message(chat_id, "⚠️ Set a target first with /target <channel>.")
+            return
+        reference = target["id"]
+    else:
+        reference = parse_channel_input(reference)
+    client, initial_account_id, chat, live_call = await resolve_record_target(
+        user_id, client, reference, initial_account_id
+    )
+    channel_id = int(chat.id)
+    title = chat.title or getattr(chat, "first_name", None) or str(channel_id)
+    if stream_recorder.get_session(user_id, channel_id):
+        await send_message(chat_id, "Bu chat allaqachon yozilmoqda. Boshqa efir uchun /record <chat> yuboring.")
         return
 
     if live_call is None:
+        if user_id in waiting_sessions:
+            await send_message(chat_id, "Bitta efir kutish rejimida. Boshqa faol efirni /record orqali yozish mumkin; kutishni bekor qilish: /stop waiting")
+            return
         pending: Dict[int, Dict[str, Any]] = getattr(
             handle_callback_query, "_pending", None
         )
         if pending is None:
             pending = {}
             handle_callback_query._pending = pending  # type: ignore[attr-defined]
-        pending[user_id] = {"channel_id": channel_id, "title": title}
+        pending[user_id] = {"channel_id": channel_id, "title": title, "account_id": initial_account_id}
         await send_message(
             chat_id,
             "The livestream has not started yet.\n"
@@ -1709,6 +1804,7 @@ async def _handle_record_once(chat_id: int, user_id: int, text: str):
             channel_id=channel_id,
             channel_title=title,
             known_call=live_call,
+            initial_account_id=initial_account_id,
         )
     except FloodWait:
         raise
@@ -1723,46 +1819,98 @@ async def _handle_record_once(chat_id: int, user_id: int, text: str):
     )
 
 
-async def handle_send(chat_id: int, user_id: int) -> None:
-    if not stream_recorder.is_recording(user_id):
+def recording_choices(sessions) -> str:
+    return "\n".join(
+        f"#{s.recording_id}: {s.channel_title} | chat={s.channel_id} | "
+        f"account={s.account_id if s.account_id is not None else 'asosiy'}"
+        for s in sessions
+    )
+
+
+async def select_recordings(chat_id: int, user_id: int, text: str):
+    """Selectors are always resolved inside this owner's active recordings."""
+    sessions = stream_recorder.get_sessions(user_id)
+    args = text.split(maxsplit=1)
+    selector = args[1].strip() if len(args) > 1 else ""
+    if selector == "all":
+        return sessions
+    if not selector:
+        if len(sessions) <= 1:
+            return sessions
+        await send_message(chat_id, "Bir nechta yozuv faol. Chat ID yoki #yozuv ID tanlang, yoki all yozing:\n"
+                           + recording_choices(sessions))
+        return None
+    try:
+        number = int(selector.lstrip('#'))
+    except ValueError:
+        number = None
+    selected = [s for s in sessions if (s.recording_id == number if selector.startswith('#') or (number is not None and number > 0) else s.channel_id == number)]
+    if not selected:
+        await send_message(chat_id, "Sizda bunday faol yozuv yo‘q. /status orqali ro‘yxatni ko‘ring.")
+        return None
+    return selected
+
+
+async def handle_send(chat_id: int, user_id: int, text: str = "/send") -> None:
+    sessions = await select_recordings(chat_id, user_id, text)
+    if sessions is None:
+        return
+    if not sessions:
         await send_message(chat_id, "Faol yozuv yo‘q. Avval /record orqali boshlang.")
         return
-    if not await stream_recorder.send_current_part(user_id):
-        await send_message(chat_id, "Yuborish uchun hali yetarli media kelmadi yoki yozuv tugatilmoqda. /status orqali holatni tekshiring.")
+    for session in sessions:
+        selector = stream_recorder._session_key(session)
+        if not await stream_recorder.send_current_part(selector):
+            await send_message(chat_id, f"{session.channel_title}: yuborish uchun hali yetarli media kelmadi yoki yozuv tugatilmoqda.")
+    await send_message(chat_id, "📤 Tanlangan yozuv nusxasi tayyorlanadi. Yozish davom etmoqda.")
+
+
+async def handle_stop(chat_id: int, user_id: int, text: str = "/stop"):
+    args = text.split(maxsplit=1)
+    choice = args[1].strip() if len(args) > 1 else ""
+    if choice == "waiting":
+        waiting = waiting_sessions.pop(user_id, None)
+        if waiting:
+            await asyncio.to_thread(db.delete_waiting, user_id)
+            if waiting.get("task"):
+                waiting["task"].cancel()
+                await asyncio.gather(waiting["task"], return_exceptions=True)
+        await send_message(chat_id, "Kutish rejimi bekor qilindi." if waiting else "Kutish rejimi yo‘q.")
         return
-    await send_message(chat_id, "📤 Hozirgacha yozilgan qism tayyorlanib yuboriladi. "
-                       "Yozuv davom etmoqda. ~1.97 GB dan kichik yozuv yakunda /send nusxasi bilan birlashtiriladi.")
-
-
-async def handle_stop(chat_id: int, user_id: int):
-    request = record_requests.pop(user_id, None)
-    if request and not request.done():
-        request.cancel()
-        await asyncio.gather(request, return_exceptions=True)
-        if not stream_recorder.is_recording(user_id) and user_id not in waiting_sessions:
-            await send_message(chat_id, "Yozishni boshlash so‘rovi bekor qilindi.")
+    sessions = await select_recordings(chat_id, user_id, text)
+    if sessions is None:
+        return
+    # An explicitly selected recording does not cancel another pending start/wait.
+    if choice in {"", "all"}:
+        request = record_requests.pop(user_id, None)
+        if request and not request.done():
+            request.cancel()
+            await asyncio.gather(request, return_exceptions=True)
+        waiting = waiting_sessions.pop(user_id, None)
+        if waiting:
+            await asyncio.to_thread(db.delete_waiting, user_id)
+            if waiting.get("task"):
+                waiting["task"].cancel()
+                await asyncio.gather(waiting["task"], return_exceptions=True)
+        # A start/probe can finish while its cancellation is being handled.
+        sessions = await select_recordings(chat_id, user_id, text)
+        if sessions is None:
             return
-    waiting = waiting_sessions.pop(user_id, None)
-    if waiting:
-        await asyncio.to_thread(db.delete_waiting, user_id)
-        if waiting.get("task"):
-            waiting["task"].cancel()
-        await send_message(chat_id, "🚫 Waiting mode cancelled.")
-        return
-    if not stream_recorder.is_recording(user_id):
+        if not sessions and (request or waiting):
+            await send_message(chat_id, "Yozishni boshlash/kutish so‘rovi bekor qilindi.")
+            return
+    if not sessions:
         await send_message(chat_id, "No active recording session.")
         return
-    track_background_task(asyncio.create_task(stop_recording_background(user_id)))
-    await send_message(
-        chat_id,
-        "Stopping the recording. FFmpeg will finalize it and upload the result here.",
-    )
+    for session in sessions:
+        track_background_task(asyncio.create_task(stop_recording_background(user_id, session.channel_id)))
+    await send_message(chat_id, "Tanlangan yozuv to‘xtatilmoqda va shu chatga yuboriladi. Boshqa yozuvlar davom etadi.")
 
 
 async def handle_status(chat_id: int, user_id: int):
     logged = await get_user_client(user_id) is not None
     target = db.get_target(user_id)
-    rec = stream_recorder.get_session(user_id)
+    sessions = stream_recorder.get_sessions(user_id)
     waiting = waiting_sessions.get(user_id)
     accounts = await asyncio.to_thread(db.list_accounts, user_id)
     lines = [
@@ -1774,11 +1922,12 @@ async def handle_status(chat_id: int, user_id: int):
         f"- Recording request pending: {'yes' if user_id in record_requests else 'no'}",
         f"- Backend: {getattr(stream_recorder, 'backend_name', 'unknown')}",
         f"- Media capture: {'enabled' if getattr(stream_recorder, 'captures_media', False) else 'disabled'}",
-        f"- Recording: {('active - ' + rec.get_duration_str()) if rec else 'no'}",
+        f"- Active recordings: {len(sessions)}",
         f"- Pool accounts: {len(accounts)}",
     ]
-    if rec:
-        lines.append(f"- {rec.stats_line()}")
+    for rec in sessions:
+        account = rec.account_id if rec.account_id is not None else "asosiy"
+        lines.append(f"- #{rec.recording_id} {rec.channel_title}: {rec.get_duration_str()} | akkaunt={account}\n  {rec.stats_line()}")
     await send_message(chat_id, "\n".join(lines))
 
 
@@ -1961,7 +2110,7 @@ async def handle_callback_query(callback: Dict[str, Any]) -> None:
             "livestream begins.",
         )
         await start_waiting_for_stream(
-            user_id, chat_id, channel_id, waiting["title"]
+            user_id, chat_id, channel_id, waiting["title"], waiting.get("account_id")
         )
         return
 
@@ -1978,10 +2127,10 @@ async def handle_accounts(chat_id: int, user_id: int):
             "No pool accounts. Add one with:\n"
             "/addaccount <session\\_string> [label]\n"
             "Pool accounts are used automatically when your own session is "
-            "rate-limited.",
+            "rate-limited or already recording another chat.",
         )
         return
-    lines = ["*Account pool*"]
+    lines = ["*Account pool* — har akkaunt bir vaqtning o‘zida bitta efir yozadi"]
     for row in accounts:
         status = "🚫 flooded" if row.get("flood_until") else "✅"
         lines.append(
@@ -2043,6 +2192,38 @@ async def handle_delaccount(chat_id: int, user_id: int, text: str):
 # ── Update dispatcher ────────────────────────────────────────────────────────
 
 async def handle_update(update: Dict[str, Any]):
+    payload = update.get("callback_query") or update.get("message") or update.get("edited_message") or {}
+    chat = (payload.get("message", {}) if update.get("callback_query") else payload).get("chat", {})
+    user_id = payload.get("from", {}).get("id")
+    if not user_id or chat.get("type") != "private" or chat.get("id") != user_id:
+        return
+    # Keep command arguments (sessions, phone numbers, passwords) out of diagnostics.
+    text = payload.get("text", "")
+    command = text.split(maxsplit=1)[0].split("@", 1)[0] if text.startswith("/") else "text"
+    if command not in {"/start", "/help", "/login", "/login_qr", "/login_phone", "/login_session", "/target", "/record", "/send", "/stop", "/status", "/accounts", "/addaccount", "/delaccount", "/logout", "/cancel", "/join"}:
+        command = "text"
+    token = request_context.set(f"user={user_id} update={update.get('update_id')} command={command}")
+    try:
+        gate = SubscriptionGate(bot_api, enabled=getattr(_config, "FORCE_SUB_ENABLED", False),
+                                channel=getattr(_config, "SUBSCRIBE_CHANNEL", 0),
+                                url=getattr(_config, "SUBSCRIBE_CHANNEL_URL", ""),
+                                owner_id=getattr(_config, "OWNER_ID", 0))
+        if update.get("callback_query") and payload.get("data") == "subscription:check":
+            await answer_callback_query(payload.get("id", ""))
+            if await gate.enforce(user_id):
+                await send_message(user_id, "✅ Obuna tasdiqlandi. Kerakli komandani qayta yuboring.")
+            return
+        # Always allow users to stop capture, inspect state or remove credentials.
+        if command not in {"/help", "/stop", "/status", "/logout", "/cancel"} and not await gate.enforce(user_id):
+            if update.get("callback_query"):
+                await answer_callback_query(payload.get("id", ""))
+            return
+        await _handle_update(update)
+    finally:
+        request_context.reset(token)
+
+
+async def _handle_update(update: Dict[str, Any]):
     if update.get("callback_query"):
         try:
             await handle_callback_query(update["callback_query"])
@@ -2086,12 +2267,14 @@ async def handle_update(update: Dict[str, Any]):
             await handle_login_phone(chat_id, user_id)
         elif text.startswith("/target"):
             await handle_target(chat_id, user_id, text)
+        elif text.split(maxsplit=1)[0].split("@", 1)[0] == "/join":
+            await handle_join(chat_id, user_id, text)
         elif text.startswith("/record"):
             await handle_record(chat_id, user_id, text)
         elif text.split(maxsplit=1)[0].split("@", 1)[0] == "/send":
-            await handle_send(chat_id, user_id)
+            await handle_send(chat_id, user_id, text)
         elif text.startswith("/stop"):
-            await handle_stop(chat_id, user_id)
+            await handle_stop(chat_id, user_id, text)
         elif text.startswith("/status"):
             await handle_status(chat_id, user_id)
         elif text.startswith("/accounts"):
@@ -2113,7 +2296,7 @@ async def handle_update(update: Dict[str, Any]):
     except Exception as exc:
         logger.exception("handle_update error for %s: %s", user_id, exc)
         try:
-            await send_message(chat_id, f"⚠️ Internal error: {exc}")
+            await send_message(chat_id, f"⚠️ Internal error: {sanitize(exc, (BOT_TOKEN, API_HASH))}")
         except Exception:
             pass
 
@@ -2133,7 +2316,7 @@ async def shutdown_clients():
 
 # ── Main ─────────────────────────────────────────────────────────────────────
 
-async def main():
+async def _run_bot():
     global _shutdown_event
 
     if not API_ID or not API_HASH or not BOT_TOKEN:
@@ -2186,7 +2369,7 @@ async def main():
     await restore_user_clients()
     for waiting in await asyncio.to_thread(db.list_waiting):
         uid = int(waiting["user_id"])
-        await start_waiting_for_stream(uid, uid, int(waiting["channel_id"]), waiting["title"])
+        await start_waiting_for_stream(uid, uid, int(waiting["channel_id"]), waiting["title"], waiting.get("account_id"))
     track_background_task(asyncio.create_task(stream_recorder.recover_incomplete()))
     print(f"[OK] Bot API polling as @{BOT_USERNAME}", flush=True)
     print(f"[INFO] Send /start to @{BOT_USERNAME}", flush=True)
@@ -2244,6 +2427,43 @@ async def main():
     await shutdown_clients()
     await account_manager.shutdown()
     print("[SHUTDOWN] Done.", flush=True)
+
+
+async def main():
+    diagnostics = TelegramDiagnostics(
+        bot_api, channel_id=getattr(_config, "LOG_CHANNEL_ID", 0),
+        owner_id=getattr(_config, "OWNER_ID", 0),
+        dedup_seconds=getattr(_config, "LOG_DEDUP_SECONDS", 120),
+        secrets=(BOT_TOKEN, API_HASH),
+    )
+    loop = asyncio.get_running_loop()
+    previous = loop.get_exception_handler()
+
+    def unhandled(loop, context):
+        exc = context.get("exception")
+        logger.error("Unhandled background task: %s", context.get("message"),
+                     exc_info=(type(exc), exc, exc.__traceback__) if exc else None)
+        if previous:
+            previous(loop, context)
+
+    enabled = bool(diagnostics.channel_id or diagnostics.owner_id)
+    if enabled:
+        diagnostics.start()
+        logging.getLogger().addHandler(diagnostics)
+    loop.set_exception_handler(unhandled)
+    try:
+        await _run_bot()
+    except Exception:
+        logger.exception("Bot runtime failed")
+        raise
+    finally:
+        loop.set_exception_handler(previous)
+        if enabled:
+            # Flush records already scheduled by emit before draining the queue.
+            await asyncio.sleep(0)
+            logging.getLogger().removeHandler(diagnostics)
+            await diagnostics.shutdown()
+        diagnostics.close()
 
 
 if __name__ == "__main__":

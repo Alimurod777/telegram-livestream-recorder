@@ -6,6 +6,8 @@ from unittest.mock import AsyncMock, Mock, patch
 from ntgcalls import MediaSegmentQuality
 from pyrogram import raw
 from pyrogram.raw.core import TLObject
+from pytgcalls import PyTgCalls
+from pytgcalls.mtproto import MtProtoClient
 from pytgcalls.mtproto.pyrogram_client import PyrogramClient
 
 from livestream.broadcast import install_broadcast_fix
@@ -18,7 +20,12 @@ class BroadcastTests(unittest.IsolatedAsyncioTestCase):
         self.bridge._cache = SimpleNamespace(get_full_chat=AsyncMock(
             return_value=raw.types.InputGroupCall(id=1, access_hash=2)))
         self.bridge._invoke = AsyncMock(return_value=SimpleNamespace(bytes=b"media"))
-        self.call = SimpleNamespace(mtproto_client=SimpleNamespace(_bind_client=self.bridge))
+        # Use the real properties: PyTgCalls.mtproto_client returns the raw
+        # Telegram client; its _app adapter owns the download bridge.
+        self.call = object.__new__(PyTgCalls)
+        self.call._mtproto = object()
+        self.call._app = object.__new__(MtProtoClient)
+        self.call._app._bind_client = self.bridge
         install_broadcast_fix(self.call)
 
     async def request(self, channel):
