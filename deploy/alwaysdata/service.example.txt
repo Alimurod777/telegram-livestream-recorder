@@ -1,0 +1,15 @@
+Alwaysdata panel: Advanced > Services > Add a service
+
+Name: telegram-livestream-recorder
+Command: /bin/sh /home/telegramdata3/telegram-livestream-recorder/deploy/alwaysdata/run_service.sh
+Environment variables: PYTHONUNBUFFERED=1 (optional; launcher already uses -u)
+Monitoring command: leave empty
+
+The script sets its own working directory and uses this project's venv.
+For another Alwaysdata account/repository path, replace the absolute path above.
+The bot uses outbound Telegram long polling; it does not listen on an HTTP port.
+
+Prepare .env and venv before enabling. Run only one service per bot token.
+Use the service's Logs and Restart controls to inspect/manage it.
+Restart can end active captures: first use /stop all and wait for delivery.
+Full setup, updates and troubleshooting: docs/ALWAYSDATA.md

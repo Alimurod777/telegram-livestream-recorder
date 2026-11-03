@@ -80,3 +80,15 @@
 - Tekshiruv: cancelled stop waiterda single finalization; bir chatdagi eski
   delivery va yangi recordingning mustaqil stopi; cancel paytida commit bo‘lgan
   yangi recordingni `/stop all` qamrab olishi regression testlari.
+
+## BUG-007 — Alwaysdata restart signali yozuvlarni tartibli yakunlamasdi
+
+- Holat: tuzatildi, 2026-11-03.
+- Sabab: Alwaysdata service Restart SIGHUP yuboradi, bot esa faqat SIGINT/SIGTERM
+  uchun shutdown handler o‘rnatardi. SIGHUP default holatda jarayonni to‘xtatardi.
+- Yechim: `install_shutdown_handlers` Linuxda SIGHUPni ham mavjud shutdown eventga
+  ulaydi; yozuvlarni yakunlash va client cleanup yo‘li ishga tushadi. Service
+  launcher to‘g‘ri cwd, venv Python va foreground exec bilan signalni Python’ga uzatadi.
+- Tekshiruv: SIGHUP/SIGTERM/SIGINT event callbacklari, platform fallback va
+  launcherning PID/cwd/argument/umask/ENVni shell sifatida bajarmaslik testlari.
+- Manba: https://help.alwaysdata.com/en/docs/web-hosting/services/

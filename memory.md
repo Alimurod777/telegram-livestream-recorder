@@ -252,3 +252,17 @@ Agar foydalanuvchi logout qilsa va qayta login qilsa, yangi instance yaratiladi.
   davomiylik/disk, Mongo va session storage. Maxfiy maydonlar bo‘sh.
 - `.gitignore`: ENV variantlari, virtual muhit, yangi loglar va lokal error dump
   himoyalangan; `.env.example` istisno. Oldin tracked runtime loglar commitga qo‘shilmaydi.
+
+### Alwaysdata service va foydalanish yo‘riqnomasi (2026-11-03)
+- User botni ishlatish, Alwaysdata service sozlash va GitHubga yuborishni so‘radi.
+- `docs/FOYDALANISH.md`: login, join, account pool, parallel record, individual/all
+  stop/send, waiting, delivery va xatolarni tushunish uchun Uzbek qo‘llanma.
+- `docs/ALWAYSDATA.md`: Python3.11 venv, .env, FFmpeg tayyorlash, Advanced > Services
+  paneliga aniq command, log, safe update/restart va muammo yechish ko‘rsatmalari.
+- `deploy/alwaysdata/run_service.sh`: root cwd, venv Python, umask077, ENV file
+  mavjudligi tekshiruvi va foreground exec. `service.example.txt` panel uchun namuna.
+- Alwaysdata rasmiy hujjatlariga muvofiq SIGHUP graceful shutdown qo‘shildi.
+  README eski config.py credential ko‘rsatmasi o‘rniga haqiqiy .env yo‘li bilan yangilandi.
+- 121 test: 108 passed, 13 FFmpeg-dependent skipped; shell syntax va diff tekshiruvi o‘tdi.
+- Alwaysdata admin panel service’i ro‘yxatdan o‘tkazilmadi: tayyor command va
+  qo‘llanma beriladi. Ishlayotgan bot restart qilinmadi; Telegramga test xabar yuborilmadi.

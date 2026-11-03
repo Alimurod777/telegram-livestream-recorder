@@ -2,11 +2,17 @@
 
 A fully automated Telegram Bot that records live streams (Voice and Video chats) in any Telegram group or channel and sends the recorded file directly to your DM.
 
+## Yo‘riqnomalar
+
+- [Botdan foydalanish: login, parallel efir, stop/send](docs/FOYDALANISH.md)
+- [Alwaysdata service: o‘rnatish, panel komandasi, yangilash](docs/ALWAYSDATA.md)
+- [Service uchun tayyor sozlamalar](deploy/alwaysdata/service.example.txt)
+
 ## 🚀 How it Works
 1. **Login:** User logs in using a QR code, Phone Number, or Session String.
 2. **Targeting:** User sets a target channel/group.
 3. **Capture:** The bot uses `py-tgcalls` (ntgcalls WebRTC) to join the voice chat, intercepts the raw audio/video frames, and pipes them directly to **FFmpeg**.
-4. **Delivery:** The final `.mp4` file is sent to the user via Telegram Bot API (supports up to 2GB via local Bot API).
+4. **Delivery:** Video/audio files are sent over MTProto; Telegram Bot API is the fallback.
 
 ## `/send`, avtomatik bo‘laklash va `/stop`
 
@@ -70,17 +76,16 @@ pip install -r requirements.txt
 ```
 
 ### 3. Setup Configuration
-Copy the example configuration file and rename it to `config.py`:
-```bash
-# On Windows
-copy config.example.py config.py
+Create `.env` from the template; keep the existing `config.py` loader:
 
-# On Linux/Mac
-cp config.example.py config.py
+```bash
+cp -n .env.example .env
+chmod 600 .env
 ```
-Open `config.py` and replace the placeholder values with your actual data:
-- `API_ID` & `API_HASH` (get from my.telegram.org)
-- `BOT_TOKEN` (get from @BotFather)
+
+On Windows: `copy .env.example .env` (only if `.env` does not already exist).
+Fill `API_ID`, `API_HASH`, `BOT_TOKEN`, `OWNER_ID` and `LOG_CHANNEL_ID` in `.env`.
+All optional settings are documented in [.env.example](.env.example).
 
 ### 4. Run the Bot
 ```bash
@@ -98,7 +103,7 @@ python bot.py
 - `agents.md` & `claude.md` — Technical reference guidelines for AI agents working on this repo.
 
 ## ⚠️ Important Note
-By default, the `recordings/` folder (where large media files are saved), `recorder.db` (your personal database), and `config.py` (your secret tokens) are **ignored** by `.gitignore`. This is to protect your privacy. The bot will automatically recreate the database and folders when you run it!
+Credentials belong in `.env`; session backups are in `sessions/`. These, `recordings/` and `recorder.db` are ignored by Git. `config.py` is a tracked loader and contains no credentials. Keep local data when updating the repository.
 
 ### Log kanal, owner va obuna
 

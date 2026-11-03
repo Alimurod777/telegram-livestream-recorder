@@ -2316,6 +2316,22 @@ async def shutdown_clients():
 
 # ── Main ─────────────────────────────────────────────────────────────────────
 
+def install_shutdown_handlers(loop, shutdown_event):
+    """Alwaysdata restarts use SIGHUP; handle it like SIGTERM/Ctrl+C."""
+    def request_shutdown():
+        print("\n[SHUTDOWN] Received stop signal...", flush=True)
+        shutdown_event.set()
+
+    signals = [signal.SIGINT, signal.SIGTERM]
+    if hasattr(signal, "SIGHUP"):
+        signals.append(signal.SIGHUP)
+    for sig in signals:
+        try:
+            loop.add_signal_handler(sig, request_shutdown)
+        except NotImplementedError:
+            signal.signal(sig, lambda s, f: request_shutdown())
+
+
 async def _run_bot():
     global _shutdown_event
 
@@ -2328,18 +2344,8 @@ async def _run_bot():
 
     _shutdown_event = asyncio.Event()
 
-    # Handle Ctrl+C gracefully
-    def _signal_handler():
-        print("\n[SHUTDOWN] Received stop signal...", flush=True)
-        _shutdown_event.set()
-
     loop = asyncio.get_running_loop()
-    for sig in (signal.SIGINT, signal.SIGTERM):
-        try:
-            loop.add_signal_handler(sig, _signal_handler)
-        except NotImplementedError:
-            # Windows doesn't support add_signal_handler
-            signal.signal(sig, lambda s, f: _signal_handler())
+    install_shutdown_handlers(loop, _shutdown_event)
 
     print("=" * 60, flush=True)
     print("  TELEGRAM LIVE STREAM RECORDER", flush=True)

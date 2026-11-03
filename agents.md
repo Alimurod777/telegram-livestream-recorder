@@ -45,6 +45,12 @@ owners using Telegram identity, including during failover and concurrent starts.
 - `database.py`: SQLite recording history, owned pool and waiting targets;
   primary session persistence also supports MongoDB and local backups.
 - `config.py` loads `config.example.py`; settings come from `.env`.
+- `docs/FOYDALANISH.md`: end-user command guide in Uzbek.
+- `docs/ALWAYSDATA.md`, `deploy/alwaysdata/run_service.sh`: Alwaysdata setup
+  and foreground launcher. Use Advanced > Services, one process per token.
+  Alwaysdata restarts send SIGHUP; preserve its graceful shutdown handler along
+  with SIGTERM/SIGINT. The launcher must exec Python and set the repository cwd.
+  Documentation/service scripts do not register or restart panel services by themselves.
 
 `StreamRecorder.active_sessions` keys are `(owner_user_id, channel_id)` tuples.
 Legacy integer keys are read only for compatibility with older test fixtures.
