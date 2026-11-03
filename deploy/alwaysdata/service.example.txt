@@ -1,8 +1,8 @@
 Alwaysdata panel: Advanced > Services > Add a service
 
 Name: telegram-livestream-recorder
-Command: /bin/sh /home/telegramdata3/telegram-livestream-recorder/deploy/alwaysdata/run_service.sh
-Working directory: telegram-livestream-recorder (relative to account home), or leave empty
+Command: bash /home/telegramdata3/telegram-livestream-recorder/scripts/start_alwaysdata.sh bot
+Working directory: leave empty (recommended); alternatively telegram-livestream-recorder
 Environment variables: PYTHONUNBUFFERED=1 (optional; launcher already uses -u)
 Monitoring command: leave empty
 

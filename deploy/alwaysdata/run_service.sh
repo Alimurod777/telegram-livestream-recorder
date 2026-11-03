@@ -6,6 +6,7 @@ umask 077
 service_script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 recorder_project_dir=$(CDPATH= cd -- "$service_script_dir/../.." && pwd)
 cd "$recorder_project_dir"
+export PATH="$HOME/bin:$HOME/.local/bin:$PATH"
 
 if [ ! -x "$recorder_project_dir/venv/bin/python" ]; then
     echo 'Recorder service: create venv and install requirements.txt first.' >&2

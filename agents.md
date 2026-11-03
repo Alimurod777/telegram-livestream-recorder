@@ -46,8 +46,12 @@ owners using Telegram identity, including during failover and concurrent starts.
   primary session persistence also supports MongoDB and local backups.
 - `config.py` loads `config.example.py`; settings come from `.env`.
 - `docs/FOYDALANISH.md`: end-user command guide in Uzbek.
-- `docs/ALWAYSDATA.md`, `deploy/alwaysdata/run_service.sh`: Alwaysdata setup
+- `docs/ALWAYSDATA.md`, `scripts/start_alwaysdata.sh bot|check`,
+  `deploy/alwaysdata/run_service.sh`: Alwaysdata setup
   and foreground launcher. Use Advanced > Services, one process per token.
+  Set panel Working directory empty (or relative `telegram-livestream-recorder`),
+  never `/home/account/...` in that field. Keep the Command script path absolute.
+  Include `$HOME/bin` and `$HOME/.local/bin` on PATH for account-installed FFmpeg.
   Alwaysdata restarts send SIGHUP; preserve its graceful shutdown handler along
   with SIGTERM/SIGINT. The launcher must exec Python and set the repository cwd.
   Documentation/service scripts do not register or restart panel services by themselves.

@@ -105,3 +105,15 @@
   ichidagi `/bin/sh /home/telegramdata3/.../run_service.sh` absolute yo‘li saqlanadi.
   Service’ni panelda yana yoqish kerak. Launcher ishchi papkani o‘zi belgilaydi.
 - Dalil: `/home/telegramdata3/admin/logs/services/2026/31090-2026-11-03.log`.
+
+## BUG-009 — Service PATH accountdagi FFmpegni topmasligi
+
+- Holat: tuzatildi, 2026-11-03.
+- Sabab: non-interactive service PATHiga `$HOME/bin` kirmasdi; mavjud
+  `/home/telegramdata3/bin/ffmpeg` va `ffprobe` SSH/test default PATHida ham topilmasdi.
+- Yechim: ishlayotgan tg-ytdlp-bot launcheriga mos `scripts/start_alwaysdata.sh`
+  qo‘shildi (`bot|check`); account bin manzillari PATHga qo‘shiladi. Oldingi deploy
+  launcher ham shu PATHni oladi. Canonical komanda endi `bash .../scripts/start_alwaysdata.sh bot`.
+- Tekshiruv: real `check` — credentials yashirilgan, barcha importlar va FFmpeg7.0.2
+  ishladi; Telegram clienti ochilmadi. Service PATH bilan 123 testning barchasi
+  o‘tdi, shu jumladan avval skip bo‘lgan 13 media pipeline testi.

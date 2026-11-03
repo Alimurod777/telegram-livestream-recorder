@@ -1,4 +1,5 @@
 import asyncio
+import os
 from pathlib import Path
 import shutil
 import signal
@@ -46,11 +47,14 @@ class ServiceLauncherTests(unittest.TestCase):
         directory.mkdir(parents=True)
         self.launcher = directory / 'run_service.sh'
         shutil.copyfile(Path(__file__).resolve().parents[1] / 'deploy/alwaysdata/run_service.sh', self.launcher)
+        self.canonical = self.root / 'scripts' / 'start_alwaysdata.sh'
+        self.canonical.parent.mkdir()
+        shutil.copyfile(Path(__file__).resolve().parents[1] / 'scripts/start_alwaysdata.sh', self.canonical)
 
     def fake_python(self):
         path = self.root / 'venv/bin/python'
         path.parent.mkdir(parents=True)
-        path.write_text('#!/bin/sh\nprintf "%s\\n" "$PWD" "$1" "$2" "$$"\numask\n')
+        path.write_text('#!/bin/sh\nprintf "%s\\n" "$PWD" "$1" "$2" "$$"\numask\nprintf "%s\\n" "$PATH"\n')
         path.chmod(0o700)
 
     def test_foreground_exec_correct_directory_arguments_and_private_umask(self):
@@ -77,6 +81,26 @@ class ServiceLauncherTests(unittest.TestCase):
         result = subprocess.run(['sh', str(self.launcher)], capture_output=True, text=True, timeout=5)
         self.assertNotEqual(result.returncode, 0)
         self.assertIn('copy .env.example', result.stderr)
+        self.assertFalse(result.stdout)
+
+    @unittest.skipUnless(shutil.which('bash'), 'Bash unavailable')
+    def test_canonical_bot_command_forwards_pid_and_adds_account_tools(self):
+        self.fake_python()
+        (self.root / '.env').write_text('')
+        process = subprocess.Popen(['bash', str(self.canonical), 'bot'], cwd='/', stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        output, errors = process.communicate(timeout=5)
+        self.assertEqual(process.returncode, 0, errors)
+        lines = output.splitlines()
+        self.assertEqual(lines[:3], [str(self.root), '-u', str(self.root / 'bot.py')])
+        self.assertEqual(int(lines[3]), process.pid)
+        self.assertTrue(lines[5].startswith(os.path.expanduser('~/bin') + ':' + os.path.expanduser('~/.local/bin') + ':'))
+
+    @unittest.skipUnless(shutil.which('bash'), 'Bash unavailable')
+    def test_unknown_service_mode_does_not_start_bot(self):
+        self.fake_python()
+        result = subprocess.run(['bash', str(self.canonical), 'unknown'], capture_output=True, text=True, timeout=5)
+        self.assertEqual(result.returncode, 2)
+        self.assertIn('[bot|check]', result.stderr)
         self.assertFalse(result.stdout)
 
 

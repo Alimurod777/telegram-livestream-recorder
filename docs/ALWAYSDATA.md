@@ -81,6 +81,17 @@ FFmpeg va FFprobe ishlaydigan manzillarni qaytarishi kerak. Tarmoq/yuklash xatos
 bo‘lsa uni tuzatib keyin service’ni yoqing. Testlar Telegramga xabar yubormaydi;
 PATHda FFmpeg topilmasa media pipeline testlari skip bo‘lishi mumkin.
 
+Service bilan bir xil PATH va venv orqali barcha tayyorgarlikni tekshirish:
+
+```bash
+bash /home/telegramdata3/telegram-livestream-recorder/scripts/start_alwaysdata.sh check
+```
+
+Bu komanda config va paketlarni import qiladi, FFmpeg/FFprobe versiyalarini
+tekshiradi; Telegram clientini ishga tushirmaydi va botga login qilmaydi.
+Launcher `$HOME/bin` va `$HOME/.local/bin`ni PATHga qo‘shadi: shu accountdagi
+FFmpeg/FFprobe shu joylardan topiladi.
+
 ## 4. Alwaysdata panelida service qo‘shish
 
 **Advanced → Services → Add a service** bo‘limida:
@@ -88,15 +99,15 @@ PATHda FFmpeg topilmasa media pipeline testlari skip bo‘lishi mumkin.
 | Maydon | Qiymat |
 |---|---|
 | Name | `telegram-livestream-recorder` |
-| Command | `/bin/sh /home/telegramdata3/telegram-livestream-recorder/deploy/alwaysdata/run_service.sh` |
-| Working directory | `telegram-livestream-recorder` (home papkaga nisbatan) yoki bo‘sh |
+| Command | `bash /home/telegramdata3/telegram-livestream-recorder/scripts/start_alwaysdata.sh bot` |
+| Working directory | Bo‘sh qoldiring (tavsiya); yoki `telegram-livestream-recorder` |
 | Environment variables | Ixtiyoriy `PYTHONUNBUFFERED=1`; launcher `-u`ni o‘zi beradi |
 | Monitoring command | Bo‘sh qoldiring |
 
 Komandani ko‘chirish uchun:
 
 ```text
-/bin/sh /home/telegramdata3/telegram-livestream-recorder/deploy/alwaysdata/run_service.sh
+bash /home/telegramdata3/telegram-livestream-recorder/scripts/start_alwaysdata.sh bot
 ```
 
 **Working directory maydoniga `/home/telegramdata3/...` yozmang.** Shu serverdagi
@@ -106,7 +117,7 @@ Faqat `telegram-livestream-recorder` yozing yoki maydonni bo‘sh qoldiring:
 launcher ishchi papkani o‘zi to‘g‘rilaydi. Bu cheklov Working directory maydoniga
 tegishli; Command ichidagi script manzili esa yuqoridagidek to‘liq yoziladi.
 
-[Launcher](../deploy/alwaysdata/run_service.sh) ishchi papkani o‘zi belgilaydi,
+[Launcher](../scripts/start_alwaysdata.sh) ishchi papkani o‘zi belgilaydi,
 loyihadagi venv Pythonini tanlaydi, `.env` mavjudligini tekshiradi va Pythonni
 `exec` orqali foreground’da ishga tushiradi. Bot HTTP port tinglamaydi, shu sabab
 port ochish, WSGI site yoki portni tekshiruvchi monitoring komandasi kerak emas.

@@ -277,3 +277,14 @@ Agar foydalanuvchi logout qilsa va qayta login qilsa, yangi instance yaratiladi.
 - docs/ALWAYSDATA.md va deploy/alwaysdata/service.example.txt tuzatildi.
 - Panelni o‘zgartirish/re-enable uchun to‘g‘ridan-to‘g‘ri boshqaruv vositasi yo‘q;
   mavjud service sozlamasini foydalanuvchi panelda almashtirishi kerak.
+
+### Ishlayotgan companion service bilan mos launcher (2026-11-03)
+- User `bash /home/telegramdata3/tg-ytdlp-bot/scripts/start_alwaysdata.sh bot`
+  ishlayotganini ko‘rsatdi; o‘sha skript o‘qilib foreground/venv/PATH tartibi olindi.
+- Recorder canonical command: `bash /home/telegramdata3/telegram-livestream-recorder/scripts/start_alwaysdata.sh bot`.
+  Working directory bo‘sh qoldiriladi; Environment PYTHONUNBUFFERED=1 ixtiyoriy;
+  Monitoring command bo‘sh. Actual panel service avtomatik o‘zgartirilmagan.
+- `... start_alwaysdata.sh check` shu Alwaysdata SSH muhitida muvaffaqiyatli:
+  Python paketlari/config, HOME/bin FFmpeg/FFprobe7.0.2 tasdiqlandi; Telegram ochilmadi.
+- HOME/bin va HOME/.local/bin PATHga qo‘shilgach 123 testning BARCHASI o‘tdi,
+  oldingi 13 skipped media testi ham shu natijaga kiradi.
