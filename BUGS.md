@@ -1,5 +1,39 @@
 # Xatolar va yechimlar
 
+## BUG-011 — Rejalashtirilgan efir vaqti kutish timeriga ta’sir qilmasdi
+
+- Holat: kod tuzatildi, 2026-11-03; jonli servis restart qilinmadi.
+- Sabab: schedule_date mavjud call faol emas deb qaytarilardi, lekin uning vaqti
+  probe loopga uzatilmasdi. Start hodisasi kelmay qolsa, 120s fallback kechikardi.
+- Yechim: call metadata schedule vaqtini olib yuradi; probe belgilangan vaqtda
+  uyg‘onadi, kechikkan scheduled efirni har 5s tekshiradi. Service/raw schedule
+  yangilanishi Event bilan kutishni uyg‘otadi. Faqat haqiqiy active call yoziladi;
+  vaqtning kelishi scheduled callni live qilmaydi. FloodWait alohida kutiladi.
+- Restartda schedule Telegramdan qayta olinadi; DBdagi account/target o‘zgarmaydi.
+  Boshqa yozuvlar, ownership va account reservation qoidalari saqlanadi.
+- Regression: tests/test_scheduled_waiting.py — vaqtga uyg‘onish, kechikkan efir,
+  schedule yangilanishi, target isolation, restartdan rediscovery, cancellation
+  va active bo‘lgandan keyingina start. Telegram transporti mock qilingan.
+
+## BUG-010 — Tarmoq xatosi buyruqlar javobini ortiqcha kechiktirishi
+
+- Holat: kod tuzatildi, 2026-11-03; ishlab turgan service avtomatik restart qilinmadi.
+- Dalil: service 31090 14:42:50 da pollingni boshlagan; 14:43:15 da timeout,
+  keyin 3 soniya qo‘shimcha backoff. Bu log kechikishning barcha sababini isbotlamaydi.
+- Sabab: sendMessage har qanday xatoda Markdown o‘rniga plain text bilan qayta
+  urinardi; ikki 60 soniyalik socket timeout bitta user navbatini ushlab qolishi
+  mumkin edi. /start akkauntni qayta ulashni ham kutardi.
+- Yechim: sendMessage socket timeout 10 soniya; faqat Telegramning 400
+  `can't parse entities` xatosida plain text fallback. Birinchi polling timeoutdan
+  keyin darhol retry, ketma-ket xatolarda backoff saqlanadi. /start cached yoki
+  saqlangan session holatini o‘qiydi, Telegramga connect qilmaydi. Haqiqiy account
+  komandalarida oldingi restore/authorization tekshiruvi saqlanadi.
+- Diagnostika: command argumentlarisiz update yoshi va handler davomiyligi logga
+  yoziladi; Telegram/tarmoq kechikishi va handler kutishini ajratish mumkin.
+- Regression: tests/test_command_latency.py va tests/test_polling.py — timeoutda
+  duplicate yo‘qligi, parsing fallback, tez /start, offset saqlanishi va birinchi
+  polling timeoutdagi darhol retry. Telegram transporti mock qilingan.
+
 ## BUG-001 — Akkaunt bir vaqtda bir nechta chatga record qilishi mumkin edi
 
 - Holat: tuzatildi, 2026-11-03.

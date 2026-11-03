@@ -101,6 +101,12 @@ continue alongside it. Waiting is persisted in `waiting_streams`, including an
 optional selected pool account ID. Waiting does not reserve an account for hours;
 capacity is checked atomically when the stream actually starts. The fallback
 probe handles targets whose service messages the primary account cannot receive.
+Scheduled call metadata also controls the probe: wake at schedule_date, then
+probe every 5 seconds while the scheduled call is late. Service/raw schedule
+changes wake the same wait via an Event; early live events still start immediately.
+Restart restores the waiting target/account from DB and rediscovers the current
+schedule from Telegram. A scheduled call is never treated as active based only
+on wall-clock time. FloodWait pauses the probe for Telegram's required duration.
 
 Account reservation transfer during failover is owned by StreamRecorder.
 `recover_recording_account` returns a reserved replacement; it releases that
@@ -117,6 +123,11 @@ waiting probes, including captures that committed just before cancellation.
 
 - Keep urllib; don't introduce requests/httpx into bot.py. Blocking Bot API,
   filesystem and encoding operations run through asyncio.to_thread or subprocesses.
+- `/start` displays cached/stored login state without reconnecting to Telegram;
+  account commands restore and validate clients when needed. Text sends use a
+  10-second socket timeout and retry plain text only for Markdown parsing errors,
+  avoiding duplicate sends on network timeouts. First polling timeout retries
+  immediately; consecutive timeouts back off. Command age/duration logs omit arguments.
 - `await call_client.calls` is correct: PyTgCalls exposes an async property.
 - Capture frame dimensions from actual frame metadata; do not validate native
   frames using fixed VIDEO_WIDTH/HEIGHT. Capture uses native video parameters.

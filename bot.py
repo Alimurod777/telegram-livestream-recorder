@@ -19,6 +19,7 @@ import re
 import signal
 import subprocess
 import sys
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -444,10 +445,16 @@ async def send_message(chat_id: int, text: str, keyboard: Optional[str] = None):
             payload["parse_mode"] = "Markdown"
         if keyboard:
             payload["reply_markup"] = keyboard
-        return bot_api("sendMessage", payload)
+        return bot_api("sendMessage", payload, timeout=10)
     try:
         return await asyncio.to_thread(run)
     except Exception as exc:
+        # Only malformed Markdown benefits from changing parse_mode. Retrying a
+        # timeout can duplicate a delivered message and blocks this user's queue.
+        if not (isinstance(exc, BotAPIError) and exc.code == 400
+                and "can't parse entities" in str(exc).lower()):
+            logger.error("send_message to %s failed: %s", chat_id, exc)
+            return None
         logger.warning("Markdown message to %s failed, retrying plain text: %s", chat_id, exc)
         try:
             return await asyncio.to_thread(run, False)
@@ -652,6 +659,7 @@ def attach_user_client_handlers(user_id: int, client: Client) -> None:
                     when = str(start_date)
             waiting = waiting_sessions.get(user_id)
             if waiting and waiting["channel_id"] == int(message.chat.id):
+                update_wait_schedule(waiting, start_date)
                 await send_message(
                     user_id,
                     f"🗓 Livestream in *{waiting['title']}* scheduled"
@@ -718,7 +726,7 @@ def attach_user_client_handlers(user_id: int, client: Client) -> None:
                     ))
             return
         waiting = waiting_sessions.get(user_id)
-        if not waiting or getattr(update.call, "schedule_date", None):
+        if not waiting:
             return
         peer = getattr(update, "peer", None)
         if peer is not None:
@@ -729,6 +737,9 @@ def attach_user_client_handlers(user_id: int, client: Client) -> None:
             chat_id = (-1_000_000_000_000 - raw_id
                        if isinstance(entity, raw.types.Channel) else -raw_id) if raw_id else None
         if chat_id != waiting["channel_id"]:
+            return
+        if getattr(update.call, "schedule_date", None):
+            update_wait_schedule(waiting, update.call.schedule_date)
             return
         try:
             await start_recording_for_user(
@@ -752,7 +763,8 @@ def attach_user_client_handlers(user_id: int, client: Client) -> None:
 def datetime_from_unix(ts: int) -> str:
     from datetime import datetime
 
-    return datetime.fromtimestamp(int(ts)).strftime("%Y-%m-%d %H:%M")
+    stamp = ts.timestamp() if isinstance(ts, datetime) else float(ts)
+    return datetime.fromtimestamp(stamp).astimezone().strftime("%Y-%m-%d %H:%M %Z")
 
 
 async def activate_user_client(user_id: int, client: Client) -> Client:
@@ -1446,8 +1458,10 @@ async def restore_user_clients() -> None:
 
 async def handle_start(chat_id: int, user_id: int):
     user_states.setdefault(user_id, UserState.IDLE)
-    if await get_user_client(user_id):
-        target = db.get_target(user_id)
+    # A welcome message needs saved login state, not a Telegram reconnect.
+    # Commands that use the account still restore/validate it normally.
+    if user_clients.get(user_id) or await asyncio.to_thread(db.get_session_string, user_id):
+        target = await asyncio.to_thread(db.get_target, user_id)
         text = (
             "✅ *Welcome back!* You are logged in.\n\n"
             "📋 *Commands:*\n"
@@ -1600,12 +1614,39 @@ async def get_channel_call(client: Client, chat) -> Any:
         if not hasattr(resolved, "_recorder_call"):
             raise ValueError("Livestream targets must be groups or channels")
         call = resolved._recorder_call
+    chat._recorder_schedule_date = None
     if call is None:
         return None
     result = await client.invoke(raw.functions.phone.GetGroupCall(call=call, limit=1))
-    if isinstance(result.call, raw.types.GroupCallDiscarded) or getattr(result.call, "schedule_date", None):
+    if isinstance(result.call, raw.types.GroupCallDiscarded):
+        return None
+    chat._recorder_schedule_date = getattr(result.call, "schedule_date", None)
+    if chat._recorder_schedule_date:
         return None
     return call
+
+
+def update_wait_schedule(waiting, schedule_date):
+    """Wake the selected wait when Telegram changes its scheduled start."""
+    stamp = schedule_date.timestamp() if isinstance(schedule_date, datetime) else schedule_date
+    waiting["schedule_date"] = float(stamp) if stamp else None
+    waiting.setdefault("wake", asyncio.Event()).set()
+
+
+async def wait_for_next_probe(waiting):
+    interval = max(1, WAIT_PROBE_INTERVAL)
+    scheduled = waiting.get("schedule_date")
+    if scheduled:
+        remaining = scheduled - time.time()
+        # Wake at the advertised time, then keep checking if the host is late.
+        # Start events remain the fastest trigger, including early starts.
+        interval = min(interval, max(0, remaining) if remaining > 0 else 5)
+    wake = waiting.setdefault("wake", asyncio.Event())
+    try:
+        await asyncio.wait_for(wake.wait(), timeout=interval)
+    except asyncio.TimeoutError:
+        pass
+    wake.clear()
 
 
 async def start_waiting_for_stream(
@@ -1622,6 +1663,7 @@ async def start_waiting_for_stream(
         "chat_id": chat_id,
         "task": None,
         "account_id": account_id,
+        "wake": asyncio.Event(),
     }
     await asyncio.to_thread(db.save_waiting, user_id, channel_id, title, account_id)
     await send_message(
@@ -1646,12 +1688,21 @@ async def wait_probe_loop(user_id: int, channel_id: int) -> None:
             return
         client = await get_user_client(user_id)
         if not client:
-            await asyncio.sleep(WAIT_PROBE_INTERVAL)
+            # Without a usable login, a scheduled time cannot accelerate probes.
+            await asyncio.sleep(max(1, WAIT_PROBE_INTERVAL))
             continue
         try:
             client, selected_account, chat, call = await resolve_record_target(
                 user_id, client, channel_id, waiting.get("account_id")
             )
+            schedule_date = getattr(chat, "_recorder_schedule_date", None)
+            stamp = schedule_date.timestamp() if isinstance(schedule_date, datetime) else schedule_date
+            if waiting.get("schedule_date") != stamp:
+                waiting["schedule_date"] = stamp
+                if stamp:
+                    await send_message(waiting["chat_id"],
+                        f"🗓 {waiting['title']}: {datetime_from_unix(stamp)}. "
+                        "Shu vaqtda efir tekshiriladi; boshlanganda yozuv avtomatik yoqiladi.")
             if call is not None:
                 await send_message(
                     user_id,
@@ -1672,9 +1723,12 @@ async def wait_probe_loop(user_id: int, channel_id: int) -> None:
                     waiting_sessions.pop(user_id, None)
                     await asyncio.to_thread(db.delete_waiting, user_id)
                 return
+        except FloodWait as exc:
+            await asyncio.sleep(max(1, _flood_seconds(exc)))
+            continue
         except Exception as exc:
             logger.debug("Wait probe failed for %s: %s", channel_id, exc)
-        await asyncio.sleep(WAIT_PROBE_INTERVAL)
+        await wait_for_next_probe(waiting)
 
 
 def wait_question_keyboard(channel_id: int) -> str:
@@ -1925,6 +1979,8 @@ async def handle_status(chat_id: int, user_id: int):
         f"- Active recordings: {len(sessions)}",
         f"- Pool accounts: {len(accounts)}",
     ]
+    if waiting and waiting.get("schedule_date"):
+        lines.append(f"- Scheduled stream: {datetime_from_unix(waiting['schedule_date'])}")
     for rec in sessions:
         account = rec.account_id if rec.account_id is not None else "asosiy"
         lines.append(f"- #{rec.recording_id} {rec.channel_title}: {rec.get_duration_str()} | akkaunt={account}\n  {rec.stats_line()}")
@@ -2203,6 +2259,11 @@ async def handle_update(update: Dict[str, Any]):
     if command not in {"/start", "/help", "/login", "/login_qr", "/login_phone", "/login_session", "/target", "/record", "/send", "/stop", "/status", "/accounts", "/addaccount", "/delaccount", "/logout", "/cancel", "/join"}:
         command = "text"
     token = request_context.set(f"user={user_id} update={update.get('update_id')} command={command}")
+    started = time.monotonic()
+    sent_at = payload.get("date") if not update.get("callback_query") else None
+    if isinstance(sent_at, (int, float)):
+        logger.info("Command received update=%s command=%s age=%.1fs",
+                    update.get("update_id"), command, max(0, time.time() - sent_at))
     try:
         gate = SubscriptionGate(bot_api, enabled=getattr(_config, "FORCE_SUB_ENABLED", False),
                                 channel=getattr(_config, "SUBSCRIBE_CHANNEL", 0),
@@ -2220,6 +2281,8 @@ async def handle_update(update: Dict[str, Any]):
             return
         await _handle_update(update)
     finally:
+        logger.info("Command finished update=%s command=%s elapsed=%.2fs",
+                    update.get("update_id"), command, time.monotonic() - started)
         request_context.reset(token)
 
 
@@ -2407,9 +2470,10 @@ async def _run_bot():
             logger.error("Polling HTTP %s, retry in %ss", exc.code, backoff)
             await asyncio.sleep(backoff)
         except TimeoutError:
-            backoff = min(max(backoff * 2, 3), max_backoff)
-            logger.warning("Bot API polling timed out; retrying in %ss. Media capture continues.", backoff)
-            await asyncio.sleep(backoff)
+            backoff = min(max(backoff * 2, 1), max_backoff)
+            retry_delay = 0 if backoff == 1 else backoff
+            logger.warning("Bot API polling timed out; retrying in %ss. Media capture continues.", retry_delay)
+            await asyncio.sleep(retry_delay)
         except Exception as exc:
             backoff = min(max(backoff * 2, 3), max_backoff)
             logger.exception("Polling error, retry in %ss: %s", backoff, exc)

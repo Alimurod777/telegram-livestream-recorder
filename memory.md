@@ -1,5 +1,34 @@
 # memory.md — Loyiha Xotirasi va Qarorlar Jurnali
 
+### Rejalashtirilgan efirni vaqtida tekshirish (2026-11-03)
+- User rejalashtirilgan efirga belgilangan vaqtda kirib yozishni so‘radi.
+- /record + wait odatdagi oqimda qoladi. get_channel_call schedule_date ni chat
+  metadatasida beradi; probe shu vaqtda uyg‘onib, scheduled efir kechiksa 5s
+  intervalga o‘tadi. Start service/raw hodisalari erta boshlanishni ham aniqlaydi.
+- Schedule service/raw yangilanishlari faqat matching waiting target Eventini
+  uyg‘otadi. /status vaqtni server timezone belgisi bilan ko‘rsatadi.
+- Vaqt yetishi scheduled callni active qilmaydi: administrator haqiqiy efirni
+  boshlashi shart. Account o‘sha paytda reserve qilinadi; boshqa yozuv to‘xtamaydi.
+- Restart schedule uchun yangi DB maydoni talab qilmaydi: saqlangan targetdan
+  Telegramdagi amaldagi schedule qayta o‘qiladi. FloodWait majburiy pauzasi saqlanadi.
+- Tekshiruv: service PATH bilan to‘liq unittest suite — 136/136 o‘tdi;
+  `git diff --check` toza. Haqiqiy Telegram so‘rovi/xabari yuborilmadi, service
+  restart qilinmadi; o‘zgarish keyingi xavfsiz restartda kuchga kiradi.
+
+### Buyruq javobi kechikishi (2026-11-03)
+- Service 31090 14:42:35 da to‘g‘ri canonical command bilan ishga tushgani logda
+  tasdiqlandi; 14:42:50 da polling tayyor. Keyingi timeout ortiqcha backoffni ko‘rsatdi.
+- sendMessage: 10s socket timeout; faqat Markdown parsing xatosida plain fallback.
+  Tarmoq timeout/403/429 xatosida qayta send duplicate va navbat kutishini oshirmaydi.
+- Birinchi polling timeout retry darhol, ketma-ket timeoutlarda bounded backoff.
+- /start faqat saved/cached login holatini ko‘rsatadi; Telegramga qayta ulanishni
+  kutmaydi. Boshqa account komandalarida haqiqiy restore/validation o‘zgarmaydi.
+- Update age va handler elapsed loglari maxfiy argumentlarsiz yoziladi.
+- Kodni tekshirish uchun jonli bot restart qilinmaydi; BUG-010 regressionlari qo‘shildi.
+- Tekshiruv: service PATH bilan `venv/bin/python -m unittest discover -s tests -t .`
+  — 130 testning barchasi o‘tdi; `git diff --check` toza. Haqiqiy Telegram xabari
+  yuborilmadi va jonli service restart qilinmadi.
+
 > Bu fayl loyiha haqidagi barcha muhim qarorlar, muammolar va holatni saqlaydi.
 > Yangi AI sessiya boshlaganda bu faylni birinchi o'qing.
 

@@ -61,6 +61,15 @@ efir boshlanishi aniqlanganda yozishga urinadi. Har foydalanuvchi uchun bir dona
 kutish maqsadi bor; bu boshqa faol yozuvlarga xalal bermaydi. Account band bo‘lsa,
 efir boshlanganda bo‘sh akkaunt kerak bo‘ladi.
 
+Rejalashtirilgan efirda ham `/record @kanal` yuborib kutishni tasdiqlang.
+Bot Telegramdan boshlanish vaqtini oladi va o‘sha vaqtda efirni tekshiradi.
+Efir hali boshlanmagan bo‘lsa, har 5 soniyada qayta tekshiradi; boshlangach
+yozishga urinadi. Erta boshlangan efir Telegram hodisasi orqali aniqlanadi.
+Vaqt o‘zgarsa, kutish yangilanadi; `/status` rejalashtirilgan vaqtni serverning
+vaqt zonasi belgisi bilan ko‘rsatadi. Bot qayta ishga tushsa, kutish DBdan,
+efirning amaldagi vaqti esa Telegramdan qayta olinadi. Bu efirni sizning nomingizdan
+ishga tushirmaydi — administrator efirni boshlashi kerak.
+
 ## 4. Ikkinchi akkaunt va parallel efir
 
 Ikkinchi, boshqa Telegram akkauntning session stringini oling. Serverda interaktiv
