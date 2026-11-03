@@ -2,10 +2,14 @@ Alwaysdata panel: Advanced > Services > Add a service
 
 Name: telegram-livestream-recorder
 Command: /bin/sh /home/telegramdata3/telegram-livestream-recorder/deploy/alwaysdata/run_service.sh
+Working directory: telegram-livestream-recorder (relative to account home), or leave empty
 Environment variables: PYTHONUNBUFFERED=1 (optional; launcher already uses -u)
 Monitoring command: leave empty
 
 The script sets its own working directory and uses this project's venv.
+Do not put /home/telegramdata3/... into the Working directory field: this panel
+prefixes the account home and would produce /home/telegramdata3/home/telegramdata3/...
+The absolute script path in Command is correct; keep it as shown above.
 For another Alwaysdata account/repository path, replace the absolute path above.
 The bot uses outbound Telegram long polling; it does not listen on an HTTP port.
 

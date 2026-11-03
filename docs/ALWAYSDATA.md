@@ -89,6 +89,7 @@ PATHda FFmpeg topilmasa media pipeline testlari skip bo‘lishi mumkin.
 |---|---|
 | Name | `telegram-livestream-recorder` |
 | Command | `/bin/sh /home/telegramdata3/telegram-livestream-recorder/deploy/alwaysdata/run_service.sh` |
+| Working directory | `telegram-livestream-recorder` (home papkaga nisbatan) yoki bo‘sh |
 | Environment variables | Ixtiyoriy `PYTHONUNBUFFERED=1`; launcher `-u`ni o‘zi beradi |
 | Monitoring command | Bo‘sh qoldiring |
 
@@ -97,6 +98,13 @@ Komandani ko‘chirish uchun:
 ```text
 /bin/sh /home/telegramdata3/telegram-livestream-recorder/deploy/alwaysdata/run_service.sh
 ```
+
+**Working directory maydoniga `/home/telegramdata3/...` yozmang.** Shu serverdagi
+panel maydonni account home papkasiga nisbatan hisoblaydi; to‘liq yo‘l kiritilsa
+`/home/telegramdata3/home/telegramdata3/...` hosil bo‘lib service boshlanmaydi.
+Faqat `telegram-livestream-recorder` yozing yoki maydonni bo‘sh qoldiring:
+launcher ishchi papkani o‘zi to‘g‘rilaydi. Bu cheklov Working directory maydoniga
+tegishli; Command ichidagi script manzili esa yuqoridagidek to‘liq yoziladi.
 
 [Launcher](../deploy/alwaysdata/run_service.sh) ishchi papkani o‘zi belgilaydi,
 loyihadagi venv Pythonini tanlaydi, `.env` mavjudligini tekshiradi va Pythonni
@@ -161,6 +169,7 @@ Shuning uchun rejalashtirilgan restartni faol yozuvlar tugagach bajaring.
 |---|---|
 | `create venv` xatosi | `venv/bin/python` mavjudligi va requirements o‘rnatilganini tekshiring |
 | `.env` yo‘q yoki `API_ID/API_HASH/BOT_TOKEN` xatosi | Loyiha papkasidagi `.env`ni to‘ldiring |
+| `working directory '/home/.../home/...' doesn't exist` | Working directory’ni `telegram-livestream-recorder`ga almashtiring yoki bo‘shating; restart urinishlari tugagan bo‘lsa service’ni yana yoqing |
 | `Another bot.py instance` yoki polling `409` | SSH va Services’da bitta token bilan ikki jarayon ishlamayotganini tekshiring |
 | `git pull` lokal loglar sabab to‘xtadi | `git status`ni ko‘ring, lokal loglarni boshqa joyga saqlang; DB yoki recording fayllarini o‘chirmang |
 | `FloodWait` | Telegram ko‘rsatgan muddatni kuting; kerak bo‘lsa bo‘sh boshqa akkaunt qo‘shing |

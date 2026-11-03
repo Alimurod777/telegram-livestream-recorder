@@ -266,3 +266,14 @@ Agar foydalanuvchi logout qilsa va qayta login qilsa, yangi instance yaratiladi.
 - 121 test: 108 passed, 13 FFmpeg-dependent skipped; shell syntax va diff tekshiruvi o‘tdi.
 - Alwaysdata admin panel service’i ro‘yxatdan o‘tkazilmadi: tayyor command va
   qo‘llanma beriladi. Ishlayotgan bot restart qilinmadi; Telegramga test xabar yuborilmadi.
+
+### Alwaysdata service 31090 ishga tushish xatosi (2026-11-03)
+- Foydalanuvchi service ishlamaganini aytdi. SSHda service logi tekshirildi:
+  working directory `/home/telegramdata3/home/telegramdata3/telegram-livestream-recorder`
+  yo‘q; service maksimal restartdan keyin to‘xtagan. Python/venv executable mavjud,
+  Python3.11.17, pip check toza. Xato Python boshlanishidan OLDIN yuz bergan.
+- Oldingi absolute Working directory tavsiyasi noto‘g‘ri edi. Panelda faqat
+  `telegram-livestream-recorder` yoki bo‘sh maydon ishlatiladi. Command absolute qoladi.
+- docs/ALWAYSDATA.md va deploy/alwaysdata/service.example.txt tuzatildi.
+- Panelni o‘zgartirish/re-enable uchun to‘g‘ridan-to‘g‘ri boshqaruv vositasi yo‘q;
+  mavjud service sozlamasini foydalanuvchi panelda almashtirishi kerak.

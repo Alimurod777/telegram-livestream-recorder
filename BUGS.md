@@ -92,3 +92,16 @@
 - Tekshiruv: SIGHUP/SIGTERM/SIGINT event callbacklari, platform fallback va
   launcherning PID/cwd/argument/umask/ENVni shell sifatida bajarmaslik testlari.
 - Manba: https://help.alwaysdata.com/en/docs/web-hosting/services/
+
+## BUG-008 — Alwaysdata Working directory maydonida home yo‘li takrorlanishi
+
+- Holat: yo‘riqnoma tuzatildi; mavjud service panelidagi qiymatni almashtirish kerak.
+- Sabab: yordamchi paneldagi Working directory maydoniga absolute loyiha yo‘lini
+  tavsiya qilgan. Service 31090 logida platforma home yo‘lini yana qo‘shib,
+  `/home/telegramdata3/home/telegramdata3/telegram-livestream-recorder` mavjud
+  emasligi sabab Pythonni ishga tushirmagan. Maksimal restart urinishlaridan keyin
+  2026-11-03 09:47:22 da service stopped bo‘lgan.
+- Yechim: Working directory = `telegram-livestream-recorder` yoki bo‘sh; Command
+  ichidagi `/bin/sh /home/telegramdata3/.../run_service.sh` absolute yo‘li saqlanadi.
+  Service’ni panelda yana yoqish kerak. Launcher ishchi papkani o‘zi belgilaydi.
+- Dalil: `/home/telegramdata3/admin/logs/services/2026/31090-2026-11-03.log`.
