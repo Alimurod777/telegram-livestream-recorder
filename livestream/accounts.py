@@ -19,6 +19,7 @@ from pyrogram import Client
 
 from config import API_HASH, API_ID
 from database import db
+from .client_lifecycle import track_client_updates
 
 logger = logging.getLogger(__name__)
 
@@ -53,6 +54,7 @@ class AccountManager:
                     in_memory=True,
                     sleep_threshold=0,
                 )
+                track_client_updates(client)
                 if not await client.connect():
                     await client.disconnect()
                     raise RuntimeError("Stored account session is no longer authorized")

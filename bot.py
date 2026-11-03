@@ -48,6 +48,7 @@ from config import (
 from database import db
 from ffmpeg_helper import get_ffmpeg_path, get_ffprobe_path, extract_video_thumbnail
 from livestream.accounts import account_manager
+from livestream.client_lifecycle import track_client_updates
 from livestream.dispatcher import UserUpdateDispatcher
 from livestream.diagnostics import TelegramDiagnostics, request_context, sanitize
 from livestream.subscription import SubscriptionGate
@@ -769,6 +770,7 @@ def datetime_from_unix(ts: int) -> str:
 
 async def activate_user_client(user_id: int, client: Client) -> Client:
     """Finish initialization and attach update handlers after authorization."""
+    track_client_updates(client)
     attach_user_client_handlers(user_id, client)
     if client.is_connected and not getattr(client, "is_initialized", False):
         if getattr(client, "me", None) is None:
@@ -820,6 +822,7 @@ async def _get_user_client_unlocked(user_id: int) -> Optional[Client]:
             session_string=session_string, in_memory=True,
             sleep_threshold=0,
         )
+        track_client_updates(client)
         if not await client.connect():
             await client.disconnect()
             raise RuntimeError("Stored session is no longer authorized")
@@ -846,6 +849,7 @@ async def save_user_session(user_id: int, client: Client):
 
 async def generate_qr_login(user_id: int):
     client = Client(f"user_{user_id}", api_id=API_ID, api_hash=API_HASH, in_memory=True)
+    track_client_updates(client)
     await client.connect()
     result = await client.invoke(
         raw.functions.auth.ExportLoginToken(api_id=API_ID, api_hash=API_HASH, except_ids=[])
@@ -1527,6 +1531,7 @@ async def handle_login_session(chat_id: int, user_id: int, text: str):
             api_id=API_ID, api_hash=API_HASH,
             session_string=args[1].strip(), in_memory=True,
         )
+        track_client_updates(client)
         if not await client.connect():
             await client.disconnect()
             raise RuntimeError("This session is no longer authorized")
@@ -2017,6 +2022,7 @@ async def handle_text(chat_id: int, user_id: int, text: str):
         user_states[user_id] = UserState.WAITING_PHONE
         client = Client(f"user_{user_id}", api_id=API_ID, api_hash=API_HASH, in_memory=True,
                         sleep_threshold=0)
+        track_client_updates(client)
         user_clients[user_id] = client
         try:
             await client.connect()
@@ -2472,7 +2478,9 @@ async def _run_bot():
         except TimeoutError:
             backoff = min(max(backoff * 2, 1), max_backoff)
             retry_delay = 0 if backoff == 1 else backoff
-            logger.warning("Bot API polling timed out; retrying in %ss. Media capture continues.", retry_delay)
+            (logger.info if retry_delay == 0 else logger.warning)(
+                "Bot API polling timed out; retrying in %ss. Media capture continues.", retry_delay,
+                extra={"diagnostic_key": "polling-timeout"})
             await asyncio.sleep(retry_delay)
         except Exception as exc:
             backoff = min(max(backoff * 2, 3), max_backoff)
@@ -2486,10 +2494,13 @@ async def _run_bot():
     for task in pending_records:
         task.cancel()
     await asyncio.gather(*pending_records, return_exceptions=True)
+    waiting_tasks = []
     for uid in list(waiting_sessions):
         waiting = waiting_sessions.pop(uid, None)
         if waiting and waiting.get("task"):
             waiting["task"].cancel()
+            waiting_tasks.append(waiting["task"])
+    await asyncio.gather(*waiting_tasks, return_exceptions=True)
     await stream_recorder.cleanup_all()
     await stream_recorder.wait_for_deliveries(timeout=30)
     await mtproto_uploader.close()

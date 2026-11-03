@@ -52,17 +52,7 @@ class EventHandler:
             if update.direction != Direction.INCOMING:
                 return
             if update.device in (Device.MICROPHONE, Device.SPEAKER):
-                ticks = {}
-                ordinals = {}
-                for frame in update.frames:
-                    if not frame.frame:
-                        continue
-                    ordinal = ordinals.get(frame.ssrc, 0)
-                    ordinals[frame.ssrc] = ordinal + 1
-                    timestamp = getattr(frame.info, "capture_time", 0) or ordinal
-                    ticks.setdefault(timestamp, []).append(frame.frame)
-                for payloads in ticks.values():
-                    session.audio_mixer.handle_audio_frames(payloads)
+                session.audio_mixer.handle_source_frames(update.frames)
             elif update.device in (Device.CAMERA, Device.SCREEN):
                 async with session.media_lock:
                     for frame in update.frames:

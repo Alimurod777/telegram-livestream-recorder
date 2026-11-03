@@ -166,6 +166,19 @@ class MediaRegressionTests(unittest.TestCase):
 
 
 class EventRegressionTests(unittest.IsolatedAsyncioTestCase):
+    async def test_audio_sources_from_separate_updates_are_mixed_not_concatenated(self):
+        from livestream.event_handler import EventHandler
+        from pytgcalls.types import StreamFrames, Direction, Device
+        mixer = AudioMixer()
+        session = SimpleNamespace(channel_id=123, finalizing=False, audio_mixer=mixer)
+        handler = EventHandler(SimpleNamespace(active_sessions={(7, 123): session}))
+        for source, sample in ((11, 100), (22, 300)):
+            frame = SimpleNamespace(ssrc=source, frame=struct.pack('<h', sample) * (TICK_BYTES // 2),
+                                    info=SimpleNamespace(capture_time=source))
+            await handler.handle_update((7, 123), StreamFrames(123, Direction.INCOMING, Device.MICROPHONE, [frame]))
+        self.assertEqual(mixer._next_audio_tick(), struct.pack('<h', 200) * (TICK_BYTES // 2))
+        self.assertIsNone(mixer._next_audio_tick())
+
     async def test_every_video_frame_in_a_batch_is_processed(self):
         from livestream.event_handler import EventHandler
         from pytgcalls.types import StreamFrames, Direction, Device
@@ -186,7 +199,7 @@ class EventRegressionTests(unittest.IsolatedAsyncioTestCase):
         frames = [SimpleNamespace(ssrc=9, frame=data, info=SimpleNamespace(capture_time=i * 10))
                   for i, data in enumerate(payloads, 1)]
         await handler.handle_update(1, StreamFrames(123, Direction.INCOMING, Device.MICROPHONE, frames))
-        self.assertEqual([mixer.audio_queue.get_nowait() for _ in range(2)], payloads)
+        self.assertEqual([mixer._next_audio_tick() for _ in range(2)], payloads)
 
 
 class BotRegressionTests(unittest.IsolatedAsyncioTestCase):

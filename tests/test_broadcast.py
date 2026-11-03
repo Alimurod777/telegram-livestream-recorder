@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock, Mock, patch
 
 from ntgcalls import MediaSegmentQuality
 from pyrogram import raw
+from pyrogram.errors import BadRequest, FloodWait
 from pyrogram.raw.core import TLObject
 from pytgcalls import PyTgCalls
 from pytgcalls.mtproto import MtProtoClient
@@ -61,6 +62,37 @@ class BroadcastTests(unittest.IsolatedAsyncioTestCase):
         self.bridge._cache.get_full_chat.return_value = None
         self.assertIsNone(await self.bridge.download_stream(-10042, 4000, 131072, None, MediaSegmentQuality.FULL))
         self.bridge._invoke.assert_not_awaited()
+
+    async def test_unavailable_chunk_is_retried_without_resynchronizing(self):
+        for error in (BadRequest(value="[400 TIME_TOO_BIG]"), FloodWait(8)):
+            with self.subTest(error=type(error).__name__):
+                self.bridge._invoke.reset_mock()
+                self.bridge._invoke.side_effect = [error, SimpleNamespace(bytes=b"media")]
+                with patch("livestream.broadcast.asyncio.sleep", new_callable=AsyncMock) as sleep:
+                    with self.assertNoLogs("livestream.broadcast", level="WARNING"):
+                        result = await self.bridge.download_stream(-10042, 4000, 131072, 1, MediaSegmentQuality.FULL)
+                    self.assertIsNone(result)
+                    sleep.assert_awaited_once_with(0.1)
+                    self.assertEqual(await self.bridge.download_stream(-10042, 4000, 131072, 1, MediaSegmentQuality.FULL), b"media")
+                calls = self.bridge._invoke.call_args_list
+                self.assertEqual(calls[0].args[0].write(), calls[1].args[0].write())
+
+    async def test_other_bad_requests_still_request_resynchronization(self):
+        self.bridge._invoke.side_effect = BadRequest(value="[400 OTHER_ERROR]")
+        with self.assertLogs("livestream.broadcast", level="WARNING"):
+            with self.assertRaises(BadRequest):
+                await self.bridge.download_stream(-10042, 4000, 131072, 1, MediaSegmentQuality.FULL)
+
+    async def test_native_callback_gets_not_ready_status(self):
+        from ntgcalls import MediaSegmentStatus
+        self.bridge._invoke.side_effect = BadRequest(value="[400 TIME_TOO_BIG]")
+        self.call._binding = SimpleNamespace(send_broadcast_part=AsyncMock())
+        request = SimpleNamespace(timestamp=4000, limit=131072, channel_id=1,
+                                  quality=MediaSegmentQuality.FULL, segment_id=1,
+                                  part_id=2, quality_update=False)
+        with patch("livestream.broadcast.asyncio.sleep", new_callable=AsyncMock):
+            await self.call._request_broadcast_part(-10042, request)
+        self.assertEqual(self.call._binding.send_broadcast_part.call_args.args[3], MediaSegmentStatus.NOT_READY)
 
 
 class EmptyCaptureTests(unittest.IsolatedAsyncioTestCase):

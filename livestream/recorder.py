@@ -123,6 +123,7 @@ class RecordingSession:
         self.state_machine = StateMachine()
         self.source_manager = SourceManager()
         self.audio_mixer = AudioMixer()
+        self.audio_mixer.diagnostic_scope = f"user={user_id} chat={channel_id} capture={stem}"
         self.muxer = MuxerManager(user_dir, stem)
         self.uploader = Uploader(self)
 

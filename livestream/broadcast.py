@@ -6,12 +6,13 @@ The issue exists in PyTgCalls 2.2.8 and 3.0.0. Keep this shim on the bridge
 instance rather than modifying installed packages.
 """
 
+import asyncio
 import logging
 import time
 from types import MethodType
 
 from pyrogram import raw
-from pyrogram.errors import FloodWait
+from pyrogram.errors import BadRequest, FloodWait
 from pytgcalls.mtproto.bridged_client import BridgedClient
 from pytgcalls.mtproto.pyrogram_client import PyrogramClient
 
@@ -45,8 +46,19 @@ def install_broadcast_fix(call_client):
             )
             return result.bytes
         except FloodWait:
+            await asyncio.sleep(0.1)
             return None
         except Exception as exc:
+            # Pyrofork currently exposes this unknown RPC as generic BadRequest.
+            # None maps to NOT_READY in PyTgCalls, preserving the pending chunk;
+            # raising instead requests RESYNC_NEEDED and discards pending chunks.
+            # https://core.telegram.org/api/group-calls#livestreams
+            if isinstance(exc, BadRequest) and (
+                getattr(exc, "ID", None) == "TIME_TOO_BIG"
+                or getattr(exc, "value", None) == "[400 TIME_TOO_BIG]"
+            ):
+                await asyncio.sleep(0.1)
+                return None
             # PyTgCalls catches this exception; surface it without log flooding.
             now = time.monotonic()
             if now - last_warning.get(chat_id, float("-inf")) >= 30:

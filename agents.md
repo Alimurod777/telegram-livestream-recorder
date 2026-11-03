@@ -41,6 +41,11 @@ owners using Telegram identity, including during failover and concurrent starts.
 - `livestream/uploader.py`, `mtproto_uploader.py`: manifests, delivery windows,
   per-session upload state, user/bot MTProto and Bot API fallback.
 - `livestream/diagnostics.py`: async bounded Telegram diagnostics queue.
+- `livestream/client_lifecycle.py`: instance-local Pyrofork update task tracking.
+  Prepare primary, pool and delivery clients before connect. Stop/disconnect
+  blocks late updates and cancels/awaits in-flight handle_updates before closing
+  session SQLite; explicit reconnect reopens the update gate. Do not hide normal
+  update exceptions or cancel another client's tasks.
 - `livestream/subscription.py`: optional Bot API membership gate.
 - `database.py`: SQLite recording history, owned pool and waiting targets;
   primary session persistence also supports MongoDB and local backups.
@@ -132,6 +137,12 @@ waiting probes, including captures that committed just before cancellation.
 - Capture frame dimensions from actual frame metadata; do not validate native
   frames using fixed VIDEO_WIDTH/HEIGHT. Capture uses native video parameters.
 - AudioParameters.bitrate is PCM sample rate (48000), not AAC/Opus bitrate.
+- Incoming audio is buffered per SSRC across callbacks, then mixed at the writer's
+  10ms tick. Never concatenate independent participants into one PCM timeline.
+  Keep a shared 2000-tick bound, drain all source tails at stop, and preserve
+  tick-boundary rotation/pipe recovery. Audio overflow summaries are throttled
+  locally (30s) and deduplicated in Telegram by a per-capture diagnostic key,
+  not by the changing dropped-frame count.
 - FFmpeg file-processing commands use `-nostdin`; streaming encoders receive raw
   PCM/I420 via pipes. Preserve generation guards and bounded frame queues.
 - Rolling parts near 1.97 GB upload while capture continues. `/send` is a preview;
@@ -146,9 +157,17 @@ waiting probes, including captures that committed just before cancellation.
 
 - Errors/warnings go first to `LOG_CHANNEL_ID` (aliases LOGS_ID/LOG_EXCEPTION),
   then to OWNER_ID's private bot chat if channel/group delivery fails.
+  Missing chat (400) or forbidden access (403) pauses that target for 300s and
+  uses the owner fallback; retry after cooldown so repaired permissions recover.
+  Transient network failures do not disable the log target. Shutdown stops
+  accepting new diagnostics before draining the existing bounded queue.
 - Keep traceback, incident ID, user/command context, redaction, bounded queue,
   deduplication and recursive logging suppression. Never include command arguments
   containing passwords, phone codes, session strings or tokens in diagnostic context.
+- Automatically handled upload.SaveBigFilePart waits up to 10s stay in local
+  logs; longer waits are rate_limit incidents with stable deduplication. An isolated
+  polling timeout is INFO; consecutive timeouts remain network warnings. Broadcast
+  TIME_TOO_BIG means NOT_READY, never a stream-ended signal or resync request.
 - `FORCE_SUB_ENABLED`, `SUBSCRIBE_CHANNEL`, `SUBSCRIBE_CHANNEL_URL` control optional
   membership requirements. Owner is exempt. Stop/status/logout/cancel/help remain
   accessible so users can stop recordings even if subscription checks fail.

@@ -3,11 +3,72 @@ import logging
 import unittest
 from unittest.mock import Mock, patch
 
-from livestream.diagnostics import TelegramDiagnostics, sanitize, request_context
+from livestream.diagnostics import TelegramDiagnostics, sanitize, request_context, category
 from livestream.subscription import SubscriptionGate
 
 
 class DiagnosticsTests(unittest.IsolatedAsyncioTestCase):
+    async def test_short_handled_upload_waits_stay_local_and_long_waits_deduplicate(self):
+        handler = TelegramDiagnostics(Mock(), owner_id=42)
+        handler.loop = asyncio.get_running_loop()
+        def emit(seconds, name="pyrogram.session.session", level=logging.WARNING):
+            handler.emit(logging.LogRecord(name, level, "", 0,
+                '[user_7] Waiting for %s seconds before continuing (required by "upload.SaveBigFilePart")',
+                (seconds,), None))
+        for seconds in (1, 2, 10):
+            emit(seconds)
+        await asyncio.sleep(0)
+        self.assertTrue(handler.queue.empty())
+        emit(11)
+        emit(20)
+        await asyncio.sleep(0)
+        self.assertEqual(handler.queue.qsize(), 1)
+        self.assertIn("category=rate_limit", handler.queue.get_nowait())
+        emit(1, level=logging.ERROR)
+        emit(1, name="other.logger")
+        await asyncio.sleep(0)
+        self.assertEqual(handler.queue.qsize(), 2)
+
+    def test_poll_timeout_has_network_category(self):
+        self.assertEqual(category("Bot API polling timed out; retrying in 2s"), "network")
+
+    async def test_missing_channel_uses_owner_and_recovers_after_cooldown(self):
+        api = Mock(side_effect=[
+            {'ok': False, 'error_code': 400, 'description': 'Bad Request: chat not found'},
+            {'ok': True}, {'ok': True}, {'ok': True},
+        ])
+        handler = TelegramDiagnostics(api, channel_id=-100, owner_id=42)
+        self.assertTrue(await handler._deliver('first'))
+        self.assertTrue(await handler._deliver('second'))
+        self.assertEqual([c.args[1]['chat_id'] for c in api.call_args_list], [-100, 42, 42])
+        handler.unavailable_until[-100] = 0
+        self.assertTrue(await handler._deliver('channel restored'))
+        self.assertEqual(api.call_args.args[1]['chat_id'], -100)
+        self.assertNotIn(-100, handler.unavailable_until)
+
+    async def test_bot_api_access_exception_also_caches_unreachable_target(self):
+        import bot
+        error = bot.BotAPIError({'error_code': 403, 'description': 'Forbidden: bot is not a member'})
+        api = Mock(side_effect=[error, {'ok': True}, {'ok': True}])
+        handler = TelegramDiagnostics(api, channel_id=-100, owner_id=42)
+        await handler._deliver('first')
+        await handler._deliver('second')
+        self.assertEqual([c.args[1]['chat_id'] for c in api.call_args_list], [-100, 42, 42])
+
+    async def test_transient_error_does_not_disable_channel(self):
+        api = Mock(side_effect=[TimeoutError(), {'ok': True}, {'ok': True}])
+        handler = TelegramDiagnostics(api, channel_id=-100, owner_id=42)
+        await handler._deliver('first')
+        await handler._deliver('second')
+        self.assertEqual([c.args[1]['chat_id'] for c in api.call_args_list], [-100, 42, -100])
+
+    async def test_shutdown_rejects_late_log_callbacks(self):
+        handler = TelegramDiagnostics(Mock(), owner_id=42)
+        handler.loop = asyncio.get_running_loop()
+        await handler.shutdown()
+        handler._enqueue('late', '', 'late error')
+        self.assertTrue(handler.queue.empty())
+
     async def test_channel_failure_falls_back_to_owner_without_recursion(self):
         def api(method, payload, **kwargs):
             logging.getLogger('transport').error('transport failed')

@@ -67,8 +67,10 @@ class PollingTests(unittest.IsolatedAsyncioTestCase):
             stack.enter_context(patch.object(self.bot, "get_updates", side_effect=get_updates))
             stack.enter_context(patch.object(self.bot.asyncio, "sleep", AsyncMock(side_effect=sleeps.append)))
             stack.enter_context(patch.object(self.bot, "_shutdown_event", None))
-            with self.assertLogs(self.bot.logger, level="WARNING"):
+            with self.assertLogs(self.bot.logger, level="INFO") as logs:
                 await self.bot._run_bot()
+        timeouts = [record for record in logs.records if "polling timed out" in record.getMessage()]
+        self.assertEqual([record.levelname for record in timeouts], ["INFO", "WARNING"])
         self.assertEqual(polls, [None, 43, 43, 43])
         self.assertEqual(sleeps, [0, 2])
 

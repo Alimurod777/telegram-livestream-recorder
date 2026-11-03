@@ -28,15 +28,15 @@ def sanitize(text, secrets=()):
 
 def category(text):
     lower = text.lower()
-    if any(s in lower for s in ("flood", "too many requests", "429")):
+    if any(s in lower for s in ("flood", "too many requests", "429", "seconds before continuing")):
         return "rate_limit"
     if any(s in lower for s in ("auth_key", "session_revoked", "session_expired", "user_deactivated")):
         return "session"
-    if any(s in lower for s in ("timeout", "network", "connection", "dns")):
+    if any(s in lower for s in ("timeout", "timed out", "network", "connection", "dns", "call lost")):
         return "network"
     if any(s in lower for s in ("participant", "private", "forbidden", "admin_required", "banned")):
         return "access"
-    if any(s in lower for s in ("ffmpeg", "encoder", "mux", "disk")):
+    if any(s in lower for s in ("ffmpeg", "encoder", "mux", "disk", "audio queue")):
         return "media"
     return "unexpected"
 
@@ -55,6 +55,9 @@ class TelegramDiagnostics(logging.Handler):
         self.seen = OrderedDict()
         self.loop = None
         self.task = None
+        self.unavailable_until = {}
+        self.accepting = True
+        self._delivery_failure_reported = False
         self.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s:%(lineno)d %(message)s"))
 
     def start(self):
@@ -62,18 +65,31 @@ class TelegramDiagnostics(logging.Handler):
         self.task = self.loop.create_task(self._run())
 
     def emit(self, record):
-        if _reporting.get() or self.loop is None or self.loop.is_closed():
+        if not self.accepting or _reporting.get() or self.loop is None or self.loop.is_closed():
             return
         try:
+            message = record.getMessage()
+            # Pyrofork has already accepted this wait and will retry internally.
+            # Keep it locally; report longer waits and actual upload failures.
+            wait = re.fullmatch(
+                r'\[.*?\] Waiting for (\d+) seconds before continuing '
+                r'\(required by "upload\.SaveBigFilePart"\)', message)
+            handled_wait = (record.name == "pyrogram.session.session" and record.levelno == logging.WARNING
+                            and not record.exc_info and wait)
+            if handled_wait and int(wait[1]) <= 10:
+                return
             detail = sanitize(self.format(record), self.secrets)
             context = sanitize(request_context.get(), self.secrets)
             stable_context = re.sub(r"update=\S+", "", context)
-            key = hashlib.sha256((record.name + record.getMessage() + stable_context).encode()).hexdigest()
+            message_key = getattr(record, "diagnostic_key", "upload-part-wait" if handled_wait else message)
+            key = hashlib.sha256((record.name + message_key + stable_context).encode()).hexdigest()
             self.loop.call_soon_threadsafe(self._enqueue, key, context, detail)
         except Exception:
             self.handleError(record)
 
     def _enqueue(self, key, context, detail):
+        if not self.accepting:
+            return
         now = time.monotonic()
         if now - self.seen.get(key, -float("inf")) < self.dedup_seconds:
             return
@@ -96,21 +112,36 @@ class TelegramDiagnostics(logging.Handler):
         finally:
             _reporting.reset(token)
 
+    def _target_failed(self, chat_id, code, description):
+        # A missing/inaccessible chat will not be repaired by another message.
+        # Retest later so adding the bot or correcting permissions takes effect.
+        if code == 403 or (code == 400 and any(part in description.lower() for part in (
+                "chat not found", "not enough rights", "chat_write_forbidden"))):
+            self.unavailable_until[chat_id] = time.monotonic() + 300
+            logging.getLogger(__name__).info(
+                "Diagnostic target %s unavailable; using fallback for 300s: %s",
+                chat_id, sanitize(description, self.secrets))
+
     async def _deliver(self, text):
         token = _reporting.set(True)
         try:
             for chat_id in dict.fromkeys((self.channel_id, self.owner_id)):
-                if not chat_id:
+                if not chat_id or time.monotonic() < self.unavailable_until.get(chat_id, 0):
                     continue
                 try:
                     result = await asyncio.to_thread(self.api, "sendMessage", {
                         "chat_id": chat_id, "text": text, "disable_web_page_preview": True,
                     }, timeout=10)
                     if result.get("ok"):
+                        self.unavailable_until.pop(chat_id, None)
+                        self._delivery_failure_reported = False
                         return True
-                except Exception:
-                    pass
-            logging.getLogger(__name__).error("Telegram diagnostic delivery failed; see local incident log")
+                    self._target_failed(chat_id, result.get("error_code"), result.get("description", ""))
+                except Exception as exc:
+                    self._target_failed(chat_id, getattr(exc, "code", 0), str(exc))
+            if not self._delivery_failure_reported:
+                self._delivery_failure_reported = True
+                logging.getLogger(__name__).error("Telegram diagnostic delivery failed; see local incident log")
             return False
         finally:
             _reporting.reset(token)
@@ -124,6 +155,7 @@ class TelegramDiagnostics(logging.Handler):
                 self.queue.task_done()
 
     async def shutdown(self):
+        self.accepting = False
         if self.task:
             try:
                 await asyncio.wait_for(self.queue.join(), timeout=25)

@@ -1,5 +1,50 @@
 # memory.md — Loyiha Xotirasi va Qarorlar Jurnali
 
+### #14 yakunlanishi va retry diagnostikasi (2026-11-03)
+- Service 31090 logi: #14 stop_reason=Telegram stream ended (17:47:36).
+  306.8 MiB video + 48.0 MiB audio ikkita fayl; ketma-ket ikki video qism emas.
+  Yakuniy 0 MB pending — yuborilgan fayllar o‘chirilgandan keyingi qoldiq.
+- Broadcast TIME_TOO_BIG end signal emas: 100ms kutish va NOT_READY, native
+  pending chunkni retry qiladi; RESYNC_NEEDED faqat haqiqiy boshqa xatolarda.
+- Qisqa auto-handled upload kutishlari lokal, uzunlari stable rate_limit incident;
+  birinchi polling timeout INFO, ketma-ketlari dedup network WARNING.
+- Faol service/yozuvlar restart qilinmagan; credentials va installed paketlar
+  o‘zgartirilmagan. BUG-015 va regressionlar sabab/yechimni saqlaydi.
+- Service PATH bilan to‘liq unittest suite 155/155 o‘tdi; git diff --check toza.
+
+### Restart race va log kanali fallback (2026-11-03)
+- User #13 ishlab turganida qolgan closed-database/chat-not-found muammolarini
+  hal qilishni so‘radi. Faol yozuvga tegilmagan va service restart qilinmagan.
+- Read-only Bot API getChat: log kanali ochilmadi (400 chat not found), owner
+  private chati ochildi. Haqiqiy xabar yuborilmadi va .env o‘zgartirilmadi.
+- client_lifecycle.py: detached handle_updates tasklari instansiya bo‘yicha
+  kuzatiladi; stop/disconnect oldidan cancel/await va late-update guard; reconnect
+  qayta ochadi. Primary/pool/delivery/login clientlar prepare qilinadi.
+- Diagnostics: missing-chat/forbidden target 300s chetlab o‘tilib owner fallback;
+  keyin kanal qayta sinaladi. Network timeout kanalni disable qilmaydi. Shutdown
+  yangi enqueue’larni to‘xtatadi; waiting probe cancellationlari ham kutiladi.
+- Kanalni botga ochish yoki noto‘g‘ri IDni tuzatish tashqi admin sozlamasi bo‘lib
+  qoladi; kod ruxsatni o‘zi bera olmaydi. BUG-013/014 sabab va cheklovlarni yozadi.
+- Service PATH bilan to‘liq unittest suite: 150/150 test o‘tdi, diff check toza.
+  Testlar Telegramga ulanmagan; bazadagi race real vaqtinchalik SQLite bilan sinaldi.
+
+### Audio overflow va incident oqimi (2026-11-03)
+- User boshqa profildan botning efirga kirganini tasdiqladi; asosiy joriy
+  muammo audio_dropped va har drop uchun Telegram diagnostika xabari ekanini aytdi.
+- #12 qayta ulanishlardan keyin audio yozmoqda. Jonli jarayon restart qilinmadi.
+- EventHandler audioni SSRC bilan AudioMixerga beradi. Manbalar callbackdan
+  tashqarida ham alohida saqlanib, writer har 10ms ularni bitta PCM tickka mix
+  qiladi. Bitta callbackdagi capture_time tengligiga tayanish olib tashlandi.
+- Umumiy source navbati 2000 tick, source soni 128; stopda partial tick pad va
+  drain qilinadi. Eski handle_audio_frames helper regression/API mosligi uchun qoladi.
+- Audio overflow ogohlantirishi 30s summary; diagnostics explicit per-capture
+  key bilan 120s dedup, o‘zgaruvchan dropped soni incidentni ko‘paytirmaydi.
+- Jonli input SSRC statistikasi eski logda yo‘q: multi-source bug qayta
+  ko‘rsatildi, lekin eski yo‘qotishlarning hammasi faqat shundan deyilmaydi.
+- Service PATH bilan to‘liq unittest suite: 142/142 test o‘tdi;
+  `git diff --check` toza. Telegramga haqiqiy test xabari yuborilmadi.
+  Tuzatishlar diskda tayyor, faol eski jarayonga keyingi xavfsiz restartda kiradi.
+
 ### Rejalashtirilgan efirni vaqtida tekshirish (2026-11-03)
 - User rejalashtirilgan efirga belgilangan vaqtda kirib yozishni so‘radi.
 - /record + wait odatdagi oqimda qoladi. get_channel_call schedule_date ni chat

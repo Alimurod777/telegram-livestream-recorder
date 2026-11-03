@@ -1,5 +1,76 @@
 # Xatolar va yechimlar
 
+## BUG-015 — Tayyor bo‘lmagan broadcast chunk resync va oddiy retry incidentlari
+
+- Dalil: #14 17:47:36 da `Telegram confirmed stream ended` sabab yakunlangan;
+  leave ham GROUPCALL_FORBIDDEN (call ended) qaytargan. TIME_TOO_BIG bundan 22s
+  oldin kelgan, stop sababi emas. Video 306.8 MiB va alohida audio 48.0 MiB
+  muvaffaqiyatli yuborilgan; dropped hisoblagichlar 0.
+- Sabab: broadcast shim TIME_TOO_BIG ni raise qilgan; PyTgCalls bu holda
+  NOT_READY o‘rniga RESYNC_NEEDED qaytaradi. Telegram hujjatiga ko‘ra bu
+  chunk hali tayyor emas: https://core.telegram.org/api/group-calls.
+- Yechim: faqat shu BadRequest va broadcast FloodWait 100ms kutib None qaytaradi;
+  native callback NOT_READY olib pending chunkni saqlaydi. Boshqa xatolar raise.
+- Pyrofork o‘zi kutib qayta urinadigan SaveBigFilePart <=10s ogohlantirishlari
+  lokal logda qoladi; kattaroq kutishlar rate_limit va stable dedup bilan yuboriladi.
+  Birinchi polling timeout INFO, ketma-ket timeout WARNING/network.
+- Regression: test_broadcast, test_diagnostics, test_polling; Telegram mock.
+  Service restart qilinmagan; tuzatishlar keyingi xavfsiz restartda kuchga kiradi.
+
+## BUG-013 — Restartda Pyrofork sessiya bazasi yopilgandan keyin update yozilishi
+
+- Holat: kod tuzatildi, 2026-11-03; faol service restart qilinmadi.
+- Dalil: 15:23:35 da Client.handle_updates → fetch_peers → storage.update_peers
+  `sqlite3.ProgrammingError: Cannot operate on a closed database` bilan yiqilgan.
+- Sabab: Pyrofork Session.handle_packet update tasklarini create_task bilan
+  ishga tushirib, Client.stop/disconnect paytida ularni kutmasdan SQLite’ni yopadi.
+- Yechim: client_lifecycle.py har client instansiyasidagi update tasklarini
+  kuzatadi; stop/disconnect oldidan yangi update’larni bloklaydi va in-flight
+  tasklarni cancel/await qiladi. Connect gate’ni qayta ochadi. Primary, pool,
+  delivery va login clientlarida qo‘llanadi; installed paketlar o‘zgartirilmaydi.
+  Shutdown kutish probe cancellationlarini ham klientlarni yopishdan oldin kutadi.
+- Tekshiruv: tests/test_client_lifecycle.py real in-memory SQLite bilan close
+  race, late update, reconnect, boshqa clientga ta’sir yo‘qligi va haqiqiy
+  update xatolari yashirilmasligini tekshiradi.
+
+## BUG-014 — Yopiq log kanaliga har incidentda qayta murojaat qilinishi
+
+- Holat: fallback/cooldown tuzatildi; kanalga kirish huquqi tashqi sozlama.
+- Dalil: configured LOG_CHANNEL_ID uchun read-only getChat `chat not found`,
+  OWNER_ID uchun getChat muvaffaqiyatli. Tekshiruvda xabar yuborilmagan.
+- Sabab: diagnostics har safar yetib bo‘lmaydigan kanalga sendMessage qilardi;
+  owner fallback ishlasa ham har urinish yangi HTTP 400 lokal xato yozardi.
+- Yechim: 400 missing chat/rights va 403 da 300s per-target cooldown; shu paytda
+  ownerga yuborish, muddati tugagach kanalga qayta urinish. Network timeout bu
+  cooldownni qo‘ymaydi. Barcha manzillar ishlamasa takroriy transport logi jamlanadi.
+  Shutdown yangi diagnostics enqueue’larini to‘xtatib mavjud navbatni tugatadi.
+- Cheklov: bu botni kanalga qo‘shmaydi va noto‘g‘ri IDni taxminan almashtirmaydi;
+  log kanali uchun to‘g‘ri ID va botning yuborish huquqi kerak.
+- Tekshiruv: tests/test_diagnostics.py — missing-chat javobi va exception,
+  owner fallback, cooldown tugagach kanal tiklanishi, transient timeout va late
+  shutdown callback. Telegram transporti mock qilingan.
+
+## BUG-012 — Audio navbati to‘lishi va diagnostika xabarlari oqimi
+
+- Holat: kod tuzatildi, 2026-11-03; faol yozuv sabab jonli service restart qilinmadi.
+- Dalil: #12 audio yozuvi o‘smoqda, ammo audio_dropped minglab oshgan; har bir
+  o‘zgargan dropped hisoblagichi alohida Telegram incidentga aylangan.
+- Koddagi sabab: audio faqat BIR callback ichidagi teng capture_time bo‘yicha
+  mix qilinardi. Mustaqil callbacklarda kelgan SSRC manbalari bitta navbatga
+  ketma-ket yozilardi; ikki parallel manba 1s o‘rniga 2s PCM hosil qilishi mumkin.
+  Bu xato regressionda qayta ko‘rsatildi; jonli ortiqcha oqimning har bir manbasi
+  eski logda yozilmagani uchun barcha yo‘qotishlarning yagona sababi deb aytilmaydi.
+- Yechim: SSRC bo‘yicha alohida buffer, writerda har 10ms bitta aralashtirilgan
+  tick. Umumiy chegara 2000 tick, source soni 128, pending tail stopda drain.
+  Rotation va pipe recovery mavjud tick chegarasida qoladi.
+- Log muammosi: har drop WARNING edi, diagnostics dedup esa sonli matnni hash
+  qilardi. Endi 30s local summary, per-capture diagnostic_key orqali 120s dedup.
+  Channel/owner/traceback/redaction saqlanadi; audio queue = media kategoriyasi,
+  call lost = network. Hisoblagichlar har drop uchun baribir yangilanadi.
+- Regression: tests/test_audio_sources.py va EventRegressionTests — alohida
+  callbackdagi manbalar, sequential/subtick PCM, writer stop/tail, bounded queue,
+  throttling, per-recording Telegram dedup. Haqiqiy Telegramga xabar yuborilmaydi.
+
 ## BUG-011 — Rejalashtirilgan efir vaqti kutish timeriga ta’sir qilmasdi
 
 - Holat: kod tuzatildi, 2026-11-03; jonli servis restart qilinmadi.

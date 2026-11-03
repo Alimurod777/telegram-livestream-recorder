@@ -16,6 +16,7 @@ from typing import Any, Dict, Optional
 from pyrogram import Client, enums
 from ffmpeg_helper import extract_video_thumbnail
 from .metadata import media_kind
+from .client_lifecycle import track_client_updates
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +34,7 @@ class MtprotoUploader:
             if self._delivery_bot is None:
                 client = Client("delivery_bot", api_id=api_id, api_hash=api_hash,
                                 bot_token=bot_token, in_memory=True, no_updates=True)
+                track_client_updates(client)
                 try:
                     await client.start()
                 except BaseException:
