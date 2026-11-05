@@ -32,6 +32,26 @@ class PollingTests(unittest.IsolatedAsyncioTestCase):
         self.assertIs(raised.exception, error)
 
     async def test_first_poll_timeout_retries_immediately_and_preserves_offset(self):
+        await self.check_poll_recovery(TimeoutError(), "polling timed out")
+
+    async def test_connection_reset_retries_without_error_incidents(self):
+        await self.check_poll_recovery(
+            urllib.error.URLError(ConnectionResetError(104, "Connection reset by peer")),
+            "polling connection interrupted")
+
+    async def test_direct_connection_reset_retries(self):
+        await self.check_poll_recovery(ConnectionResetError(104, "Connection reset by peer"),
+                                       "polling connection interrupted")
+
+    async def test_poll_network_error_is_logged_only_by_retry_loop(self):
+        error = urllib.error.URLError(ConnectionResetError(104, "Connection reset by peer"))
+        with patch.object(self.bot.urllib.request, "urlopen", side_effect=error), \
+                patch.object(self.bot.logger, "error") as log_error:
+            with self.assertRaises(urllib.error.URLError):
+                await self.bot.get_updates(43)
+        log_error.assert_not_called()
+
+    async def check_poll_recovery(self, error, message):
         polls = []
         sleeps = []
 
@@ -40,7 +60,7 @@ class PollingTests(unittest.IsolatedAsyncioTestCase):
             if len(polls) == 1:
                 return {"result": [{"update_id": 42}]}
             if len(polls) < 4:
-                raise TimeoutError()
+                raise error
             self.bot._shutdown_event.set()
             return {"result": []}
 
@@ -69,8 +89,10 @@ class PollingTests(unittest.IsolatedAsyncioTestCase):
             stack.enter_context(patch.object(self.bot, "_shutdown_event", None))
             with self.assertLogs(self.bot.logger, level="INFO") as logs:
                 await self.bot._run_bot()
-        timeouts = [record for record in logs.records if "polling timed out" in record.getMessage()]
+        timeouts = [record for record in logs.records if message in record.getMessage()]
         self.assertEqual([record.levelname for record in timeouts], ["INFO", "WARNING"])
+        self.assertTrue(all(record.exc_info is None for record in timeouts))
+        self.assertEqual(timeouts[0].diagnostic_key, timeouts[1].diagnostic_key)
         self.assertEqual(polls, [None, 43, 43, 43])
         self.assertEqual(sleeps, [0, 2])
 

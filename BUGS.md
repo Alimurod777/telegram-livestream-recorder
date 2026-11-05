@@ -1,5 +1,18 @@
 # Xatolar va yechimlar
 
+## BUG-016 — Polling connection reset ortiqcha ERROR incident yuborardi
+
+- Dalil: incident 969ab6527b03, 2026-11-04; getUpdates TLS handshake vaqtida
+  ConnectionResetError(104) bilan uzilgan. Bu log keyingi tiklanishni tasdiqlamaydi.
+- Sabab: URLError umumiy exception handlerga tushib, traceback bilan ERROR
+  yuborardi; bot_api ham shu polling xatosini alohida ERROR sifatida log qilardi.
+- Yechim: polling tarmoq uzilishini alohida boshqaradi: birinchi retry darhol va
+  INFO, ketma-ketlari 60s gacha backoff va stable polling-network WARNING.
+  getUpdates transport logi retry loopga topshirildi; boshqa API metodlari saqlandi.
+- Regression: wrapped/direct connection reset, offset saqlanishi, retry delay,
+  stable diagnostic key va takroriy transport ERROR yo‘qligi. Telegram mock.
+  Service restart qilinmaydi; o‘zgarish keyingi ishga tushirishda kuchga kiradi.
+
 ## BUG-015 — Tayyor bo‘lmagan broadcast chunk resync va oddiy retry incidentlari
 
 - Dalil: #14 17:47:36 da `Telegram confirmed stream ended` sabab yakunlangan;

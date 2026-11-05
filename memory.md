@@ -1,5 +1,12 @@
 # memory.md — Loyiha Xotirasi va Qarorlar Jurnali
 
+### Polling connection reset diagnostikasi (2026-11-05)
+- Incident 969ab6527b03 getUpdates TLS ulanishining uzilishini ko‘rsatdi.
+- Polling transport xatolari retry loopda boshqariladi: birinchi INFO/darhol,
+  takrorlari bounded backoff va stable polling-network WARNING; ikki ERROR yo‘q.
+- Media capture lifecycle va account sig‘imi o‘zgarmadi; jonli restart qilinmadi.
+- BUG-016 sabab/yechim va tarmoqsiz regression tekshiruvlarini saqlaydi.
+
 ### #14 yakunlanishi va retry diagnostikasi (2026-11-03)
 - Service 31090 logi: #14 stop_reason=Telegram stream ended (17:47:36).
   306.8 MiB video + 48.0 MiB audio ikkita fayl; ketma-ket ikki video qism emas.

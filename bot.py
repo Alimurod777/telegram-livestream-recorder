@@ -286,7 +286,9 @@ def bot_api(method: str, data: Optional[Dict[str, Any]] = None, timeout: int = 6
         logger.error("Bot API %s HTTP %s: %s", method, exc.code, body)
         raise BotAPIError(result) from None
     except urllib.error.URLError as exc:
-        logger.error("Bot API %s network error: %s", method, exc.reason)
+        # Polling owns retry severity/deduplication; avoid a second incident here.
+        if method != "getUpdates":
+            logger.error("Bot API %s network error: %s", method, exc.reason)
         raise
 
 
@@ -2481,6 +2483,13 @@ async def _run_bot():
             (logger.info if retry_delay == 0 else logger.warning)(
                 "Bot API polling timed out; retrying in %ss. Media capture continues.", retry_delay,
                 extra={"diagnostic_key": "polling-timeout"})
+            await asyncio.sleep(retry_delay)
+        except (urllib.error.URLError, ConnectionError, http.client.IncompleteRead) as exc:
+            backoff = min(max(backoff * 2, 1), max_backoff)
+            retry_delay = 0 if backoff == 1 else backoff
+            (logger.info if retry_delay == 0 else logger.warning)(
+                "Bot API polling connection interrupted (%s); retrying in %ss. Media capture continues.",
+                exc, retry_delay, extra={"diagnostic_key": "polling-network"})
             await asyncio.sleep(retry_delay)
         except Exception as exc:
             backoff = min(max(backoff * 2, 3), max_backoff)
