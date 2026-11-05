@@ -183,3 +183,8 @@ Run `venv/bin/python -m unittest discover -s tests -t .` so tests/__init__.py in
 isolated config. FFmpeg-dependent tests may skip if binaries are unavailable.
 Run `git diff --check`. Preserve pre-existing uncommitted changes and recordings.
 Do not restart a live bot while recordings may be active just to validate code.
+
+After completing a task that changes local code or project instructions, validate
+the changes, commit the task's changes, and push them to GitHub. Do not include
+credentials, recordings, or unrelated local changes. If push fails, report the
+failure and the remaining local commit explicitly.

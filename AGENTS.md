@@ -14,3 +14,8 @@ stopping, or delivering another recording.
 
 Validation: `venv/bin/python -m unittest discover -s tests -t .` (isolated config;
 no real Telegram messages). Do not restart a live recorder just to run tests.
+
+After completing a task that changes local code or project instructions, validate
+the changes, commit the task's changes, and push them to GitHub. Do not include
+credentials, recordings, or unrelated local changes. If push fails, report the
+failure and the remaining local commit explicitly.
