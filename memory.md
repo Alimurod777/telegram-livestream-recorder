@@ -13,6 +13,16 @@
   Added 34%, +10%, -10% drift regression cases. Live activation needs a safe
   service restart after capture/delivery end; no service management tool or
   Alwaysdata credential binding is available in this agent environment.
+- Owner restarted service 31110: old client stopped at 19:01:56, new process
+  963028 restored the account and began Bot API polling at 19:02:06, after the
+  clock fix was written. Normal polling command handling confirmed at 19:02:19.
+- #3 was repaired to 4935.659s (1h22m16s), without re-encoding: all 140819 H.264
+  and 231359 AAC packets retain identical per-stream payload hashes and order.
+  Audio timestamps are now continuous. Both repaired files were delivered to
+  the owner's bot chat and Telegram confirmed; original downloads remain local.
+- Full isolated suite: 166 tests passed, including installed FFmpeg tests;
+  git diff --check clean. The live restart was user-triggered after recording
+  and final delivery ended, not performed as a test.
 
 ### Video clock validation and short recordings stretched to an hour (2026-11-05)
 - Recording #2 lasted 12m32s but repeatedly encoded at 1 FPS after an invalid

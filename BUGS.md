@@ -34,6 +34,9 @@
   time, with regression cases at 34%, 10% and -10% drift as well as wrong units.
   Restarting the idle service is still required to load code changes; editing
   and pushing source files does not update Python modules in the live process.
+- Activation: owner restarted service 31110 at 19:02, after final delivery ended.
+  The new process restored the account and polling successfully. #3's repaired
+  1h22m16s video/audio were delivered with all encoded packet payloads unchanged.
 
 ## BUG-017 — Video resolution changes spammed source-switch notifications
 
