@@ -12,7 +12,7 @@ from livestream.state_machine import StateMachine
 
 class VideoTimingTests(unittest.TestCase):
     def test_capture_clock_units_are_checked_against_elapsed_time(self):
-        for scale in (1, 1000, 1_000_000, 4_294_967.296):
+        for scale in (1, 30 / 22.4, 1.1, 0.9, 1000, 1_000_000, 4_294_967.296):
             with self.subTest(capture_units_per_millisecond=scale):
                 handler = EventHandler(SimpleNamespace())
                 session = SimpleNamespace(muxer=SimpleNamespace(encoder_fps=30))

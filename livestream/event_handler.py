@@ -109,7 +109,10 @@ class EventHandler:
             # Never assume a positive native capture timestamp is a usable ms
             # clock. Wrong units or jumps used to produce tiny FPS estimates,
             # clamped to 1 FPS by the encoder, stretching minutes into hours.
-            if 0.5 <= capture_span / arrival_span <= 2.0:
+            # A 30 -> 22.4 FPS clock error is still a plausible-looking rate,
+            # but differs by 34% from real time. A factor-of-two tolerance
+            # allowed that drift to survive the original wrong-units guard.
+            if 0.95 <= capture_span / arrival_span <= 1.05:
                 span = capture_span
         fps = (len(window) - 1) / span
         return fps if math.isfinite(fps) and 1 <= fps <= 120 else 0.0

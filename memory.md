@@ -1,5 +1,19 @@
 # memory.md — Loyiha Xotirasi va Qarorlar Jurnali
 
+### #3 duration discrepancy and live deployment status (2026-11-05)
+- #3 ran from 17:22 to 18:45 (1h22m17s) and delivered at 18:47 with 1h32m40s
+  media duration. The service was still running OLD code: integer declared_fps
+  logs and 1 FPS encoders prove the earlier disk-only fix had not been loaded.
+- Owner authorized session-based retrieval and repaired media delivery. #2 was
+  downloaded, rebuilt to 12m33s and sent to the same bot chat; originals retained.
+  #3 was also downloaded to a separate recordings subdirectory. Its AAC payload
+  is 4935.66s; 8 timestamp gaps added about 624s. Native frames remain present.
+- Narrowed capture/arrival consistency from factor-of-two to within 5%; otherwise
+  a plausible 34% drift (30→22.4 FPS) could pass the wrong-units safeguard.
+  Added 34%, +10%, -10% drift regression cases. Live activation needs a safe
+  service restart after capture/delivery end; no service management tool or
+  Alwaysdata credential binding is available in this agent environment.
+
 ### Video clock validation and short recordings stretched to an hour (2026-11-05)
 - Recording #2 lasted 12m32s but repeatedly encoded at 1 FPS after an invalid
   tiny FPS estimate. Native capture clock units were assumed, not validated;

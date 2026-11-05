@@ -24,6 +24,16 @@
 - Recording #2's local media was already removed after successful delivery;
   rebuilding that delivered file requires obtaining the media again. Active
   recording #3 is not restarted or modified by this disk-only fix.
+- Follow-up: #2 was downloaded through the owner's authorized session and
+  reconstructed to 12m33s. #3 subsequently completed on the same OLD live
+  process: caption 1h22m17s, media 1h32m40s. Its AAC packets contain 1h22m16s;
+  a 20s era encoded at 1 FPS accounts for a 580s timestamp gap, with seven
+  smaller gaps from 22.4 FPS eras. This was not evidence of the new code running.
+- The original clock consistency tolerance (0.5–2 times arrival time) was also
+  too broad for plausible 30→22.4 FPS drift. It is now within 5% of arrival
+  time, with regression cases at 34%, 10% and -10% drift as well as wrong units.
+  Restarting the idle service is still required to load code changes; editing
+  and pushing source files does not update Python modules in the live process.
 
 ## BUG-017 — Video resolution changes spammed source-switch notifications
 
