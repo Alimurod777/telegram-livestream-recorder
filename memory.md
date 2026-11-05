@@ -1,5 +1,14 @@
 # memory.md — Loyiha Xotirasi va Qarorlar Jurnali
 
+### Video source notification semantics (2026-11-05)
+- User reported repeated SCREENSHARE → SCREENSHARE messages at alternating
+  1364×768 / 682×384 resolutions. Encoder format changes shared the notification
+  path with source-type changes (BUG-017).
+- Only camera/screenshare type transitions now notify the owner. Native sizes,
+  rotation and SSRC replacement still update capture and rotate parts normally.
+- Regression covers adaptation without notification spam and real type changes.
+  Active recordings are left running; no service restart or real Telegram sends.
+
 ### Polling connection reset diagnostikasi (2026-11-05)
 - Incident 969ab6527b03 getUpdates TLS ulanishining uzilishini ko‘rsatdi.
 - Polling transport xatolari retry loopda boshqariladi: birinchi INFO/darhol,

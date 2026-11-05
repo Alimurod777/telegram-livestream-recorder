@@ -238,8 +238,13 @@ class EventHandler:
             )
             session.state_machine.transition(new_state)
 
-            # Notify user about source switch (fire-and-forget)
-            if self.recorder._notify_callback and old_type != "none":
+            # Native resolution/rotation and SSRC changes still reconfigure the
+            # encoder, but only a source-type transition needs a user message.
+            if (
+                self.recorder._notify_callback
+                and old_type != "none"
+                and old_type != best_source.source_type.name
+            ):
                 try:
                     asyncio.create_task(
                         self.recorder._notify(

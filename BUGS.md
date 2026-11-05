@@ -1,5 +1,18 @@
 # Xatolar va yechimlar
 
+## BUG-017 — Video resolution changes spammed source-switch notifications
+
+- Cause: the encoder reconfiguration path handles native resolution, rotation,
+  SSRC and source-type changes together, notifying the owner on every change.
+  Repeated 1364×768 / 682×384 frames therefore produced same-type messages.
+- Fix: notify only when switching between camera and screenshare. Native
+  format changes and replacement SSRCs still reconfigure the encoder and rotate
+  audio/video parts as before, without a user notification.
+- Regression: EventRegressionTests feeds alternating native dimensions, rotation,
+  replacement SSRC and camera/screenshare transitions; checks frame delivery,
+  generations, audio/video rotation and owner notifications. Telegram is mocked.
+- The live service is not restarted; the fix applies on its next safe restart.
+
 ## BUG-016 — Polling connection reset ortiqcha ERROR incident yuborardi
 
 - Dalil: incident 969ab6527b03, 2026-11-04; getUpdates TLS handshake vaqtida

@@ -166,6 +166,68 @@ class MediaRegressionTests(unittest.TestCase):
 
 
 class EventRegressionTests(unittest.IsolatedAsyncioTestCase):
+    async def test_video_adaptation_is_silent_but_type_transitions_notify(self):
+        from livestream.event_handler import EventHandler
+        from pytgcalls.types import StreamFrames, Direction, Device
+
+        notify = AsyncMock()
+        muxer = SimpleNamespace(
+            video_segments=["existing.mkv"],
+            request_rotation=Mock(),
+            start_video_encoder=Mock(side_effect=range(1, 20)),
+            write_video_frame_async=AsyncMock(return_value=True),
+        )
+        session = SimpleNamespace(
+            user_id=7, channel_id=123, finalizing=False,
+            media_lock=asyncio.Lock(), source_manager=SourceManager(),
+            active_video_source=None, muxer=muxer,
+            audio_mixer=SimpleNamespace(request_rotate=Mock()),
+            state_machine=StateMachine(), video_frames=0,
+        )
+        handler = EventHandler(SimpleNamespace(
+            active_sessions={(7, 123): session},
+            _notify_callback=notify, _notify=notify,
+        ))
+
+        async def feed(ssrc, device, width, height, rotation=0):
+            frame = SimpleNamespace(
+                ssrc=ssrc, frame=b"\x00" * (width * height * 3 // 2),
+                info=SimpleNamespace(width=width, height=height,
+                                     rotation=rotation, capture_time=0),
+            )
+            await handler.handle_update(
+                (7, 123), StreamFrames(123, Direction.INCOMING, device, [frame])
+            )
+            await asyncio.sleep(0)  # Run the fire-and-forget notification.
+
+        # Initial capture, repeated native resizes and rotation stay silent.
+        for width, height in [(1364, 768), (682, 384)] * 3:
+            await feed(11, Device.SCREEN, width, height)
+            self.assertEqual(session.active_video_source.resolution, (width, height))
+        await feed(11, Device.SCREEN, 682, 384, rotation=90)
+        # A replacement SSRC with the same type is also silent.
+        session.source_manager.remove_source(11)
+        await feed(22, Device.SCREEN, 682, 384)
+        notify.assert_not_awaited()
+        self.assertEqual(muxer.start_video_encoder.call_count, 8)
+        self.assertEqual(muxer.write_video_frame_async.await_count, 8)
+        self.assertEqual(muxer.request_rotation.call_count, 8)
+        self.assertEqual(session.audio_mixer.request_rotate.call_count, 8)
+        self.assertEqual(
+            [call.args[0] for call in muxer.write_video_frame_async.call_args_list],
+            list(range(1, 9)),
+        )
+
+        # Actual camera/screenshare transitions still notify the owner.
+        session.source_manager.remove_source(22)
+        await feed(33, Device.CAMERA, 640, 480)
+        await feed(44, Device.SCREEN, 1364, 768)
+        self.assertEqual(notify.await_count, 2)
+        self.assertIn("SCREEN_SHARE → CAMERA", notify.await_args_list[0].args[1])
+        self.assertIn("CAMERA → SCREEN_SHARE", notify.await_args_list[1].args[1])
+        self.assertTrue(all(call.args[0] == 7 for call in notify.await_args_list))
+        self.assertEqual(session.video_frames, 10)
+
     async def test_audio_sources_from_separate_updates_are_mixed_not_concatenated(self):
         from livestream.event_handler import EventHandler
         from pytgcalls.types import StreamFrames, Direction, Device
