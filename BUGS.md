@@ -1,5 +1,30 @@
 # Xatolar va yechimlar
 
+## BUG-018 — Tiny FPS estimates stretched a short recording into an hour
+
+- Evidence: recording #2 ran for 12m32s, with 4058 video frames. Logs repeatedly
+  show measured_fps=0.0 followed by encoder restarts at 1 FPS. The user reported
+  video/audio lasting about 61 minutes. The raw native timestamps were not logged,
+  so their precise units/discontinuity cannot be established retrospectively.
+- Cause: any positive capture_time was trusted as a millisecond clock, without
+  checking elapsed arrival time. Tiny estimates were clamped to 1 FPS by the
+  encoder, stretching frames; comparison against the unclamped estimate then
+  caused another rotation every 20s. Delivery concatenation uses the longest
+  stream duration, propagating the stretched video timeline into audio gaps.
+  Native resizes also discarded the FPS estimate and temporarily reset to 30 FPS.
+- Fix: keep paired monotonic arrival/capture samples. Trust capture milliseconds
+  only when positive, increasing and consistent with elapsed arrival time;
+  otherwise measure arrival cadence. Require a real observation interval and
+  reject estimates outside the encoder's 1–120 FPS range. Keep cadence through
+  resolution/rotation changes; pipe recovery retains the current encoder rate.
+- Regression: test_video_timing reproduces tiny estimates with wrong clock units,
+  clock resets/repeats/missing values, buffered bursts, resizes and restart loops.
+  A real FFmpeg test encodes/resizes/combines 6 seconds and checks both video and
+  extracted audio remain 6 seconds. Tests isolate Telegram and production media.
+- Recording #2's local media was already removed after successful delivery;
+  rebuilding that delivered file requires obtaining the media again. Active
+  recording #3 is not restarted or modified by this disk-only fix.
+
 ## BUG-017 — Video resolution changes spammed source-switch notifications
 
 - Cause: the encoder reconfiguration path handles native resolution, rotation,

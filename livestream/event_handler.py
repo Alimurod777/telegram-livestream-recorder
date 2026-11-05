@@ -12,6 +12,7 @@ Also:
 
 import asyncio
 import logging
+import math
 import time
 from collections import deque
 from types import SimpleNamespace
@@ -94,10 +95,24 @@ class EventHandler:
         window = self._fps_windows.get(id(session))
         if not window or len(window) < _FPS_MIN_SAMPLES:
             return 0.0
-        span = window[-1] - window[0]
-        if span <= 0:
+        arrival_span = window[-1][0] - window[0][0]
+        # A callback can contain a burst of buffered frames. Wait for a real
+        # observation interval before changing the rawvideo input framerate.
+        if arrival_span < 0.5:
             return 0.0
-        return (len(window) - 1) / span
+        span = arrival_span
+        capture_times = [capture for _, capture in window]
+        if all(capture > 0 for capture in capture_times) and all(
+            later > earlier for earlier, later in zip(capture_times, capture_times[1:])
+        ):
+            capture_span = (capture_times[-1] - capture_times[0]) / 1000.0
+            # Never assume a positive native capture timestamp is a usable ms
+            # clock. Wrong units or jumps used to produce tiny FPS estimates,
+            # clamped to 1 FPS by the encoder, stretching minutes into hours.
+            if 0.5 <= capture_span / arrival_span <= 2.0:
+                span = capture_span
+        fps = (len(window) - 1) / span
+        return fps if math.isfinite(fps) and 1 <= fps <= 120 else 0.0
 
     def _track_fps(
         self, session, now: float, capture_time_ms: int = 0
@@ -105,14 +120,13 @@ class EventHandler:
         window = self._fps_windows.setdefault(
             id(session), deque(maxlen=_FPS_WINDOW)
         )
-        timestamp = capture_time_ms / 1000.0 if capture_time_ms > 0 else now
-        if window and timestamp <= window[-1]:
+        if window and now < window[-1][0]:
             window.clear()
-        window.append(timestamp)
+        window.append((now, capture_time_ms))
         return self._measured_fps(session)
 
     def _needs_fps_restart(self, session, fps: float) -> bool:
-        if not fps:
+        if not math.isfinite(fps) or not 1 <= fps <= 120:
             return False
         declared = session.muxer.encoder_fps
         return abs(fps - declared) / max(declared, 1) > _FPS_DRIFT
@@ -123,12 +137,14 @@ class EventHandler:
             return self._session_generation.get(id(session), -1)
         self._last_restart[id(session)] = now
         logger.info(
-            "Restarting video encoder (%s): measured_fps=%.1f declared_fps=%d",
+            "Restarting video encoder (%s): measured_fps=%.3f declared_fps=%.3f",
             why, fps, session.muxer.encoder_fps,
         )
         session.muxer.request_rotation()
         session.audio_mixer.request_rotate()
-        generation = session.muxer.start_video_encoder(source=source, fps=fps or None)
+        generation = session.muxer.start_video_encoder(
+            source=source, fps=fps or session.muxer.encoder_fps
+        )
         self._session_generation[id(session)] = generation
         return generation
 
@@ -178,10 +194,13 @@ class EventHandler:
             return
 
         # 6. Switch source if needed (different source, or resolution changed)
-        needs_switch = (
+        source_changed = (
             session.active_video_source is None
             or session.active_video_source.source_id != best_source.source_id
             or session.active_video_source.source_type != best_source.source_type
+        )
+        needs_switch = (
+            source_changed
             or session.active_video_source.width != best_source.width
             or session.active_video_source.height != best_source.height
             or session.active_video_source.rotation != best_source.rotation
@@ -199,7 +218,7 @@ class EventHandler:
                            session.channel_id, frame.ssrc, len(frame.frame),
                            best_source.expected_frame_size)
             return
-        if needs_switch:
+        if source_changed:
             self._fps_windows.pop(id(session), None)
         capture_time = int(getattr(frame.info, "capture_time", 0) or 0)
         fps = self._track_fps(session, now, capture_time)

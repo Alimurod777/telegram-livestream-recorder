@@ -1,5 +1,20 @@
 # memory.md — Loyiha Xotirasi va Qarorlar Jurnali
 
+### Video clock validation and short recordings stretched to an hour (2026-11-05)
+- Recording #2 lasted 12m32s but repeatedly encoded at 1 FPS after an invalid
+  tiny FPS estimate. Native capture clock units were assumed, not validated;
+  raw timestamps were not retained. BUG-018 records evidence and limitations.
+- FPS samples now pair monotonic arrivals with capture timestamps, accepting
+  capture milliseconds only when their elapsed time agrees with arrivals.
+  Invalid/repeated/reset clocks fall back to arrival cadence; bursts and rates
+  outside 1–120 cannot trigger encoder restart loops. Resizes retain cadence.
+- Synthetic clock and frame-routing regressions plus real FFmpeg delivery tests
+  check video/audio duration. The previous successful upload cleaned #2's local
+  sources; they cannot be repaired in place without retrieving the media again.
+- Recording #3 stays running; code changes take effect at the next safe restart.
+- Validation: all 166 isolated tests passed, including real FFmpeg pipeline
+  checks using the installed static_ffmpeg binaries; git diff --check is clean.
+
 ### Video source notification semantics (2026-11-05)
 - User reported repeated SCREENSHARE → SCREENSHARE messages at alternating
   1364×768 / 682×384 resolutions. Encoder format changes shared the notification

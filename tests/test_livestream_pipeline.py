@@ -58,6 +58,59 @@ class QueueTests(unittest.IsolatedAsyncioTestCase):
 
 @unittest.skipUnless(FFMPEG.exists() and FFPROBE.exists(), "bundled FFmpeg is unavailable")
 class PipelineTests(unittest.TestCase):
+    def test_invalid_capture_clock_does_not_stretch_video_or_extracted_audio(self):
+        from types import SimpleNamespace
+        from livestream.event_handler import EventHandler
+        from livestream.uploader import Uploader
+        from config import AUDIO_SAMPLE_RATE, AUDIO_CHANNELS
+
+        handler = EventHandler(SimpleNamespace())
+        clock_session = SimpleNamespace()
+        for index in range(90):
+            fps = handler._track_fps(
+                clock_session, 100 + index / 15,
+                10_000_000_000 + index * 66_666_667,
+            )
+        with tempfile.TemporaryDirectory() as directory:
+            muxer = MuxerManager(directory, "timing")
+            try:
+                for era, (width, height) in enumerate([(64, 48), (32, 24), (64, 48)]):
+                    if era:
+                        muxer.request_rotation()
+                    audio = muxer.start_audio_encoder()
+                    audio.stdin.write(b"\0" * (2 * AUDIO_SAMPLE_RATE * AUDIO_CHANNELS * 2))
+                    audio.stdin.close()
+                    generation = muxer.start_video_encoder(
+                        VideoSource(11, SourceType.SCREEN_SHARE, width, height), fps=fps,
+                    )
+                    for _ in range(30):
+                        self.assertTrue(muxer.write_video_frame(
+                            generation, i420_frame(width, height, 70),
+                        ))
+                muxer.finalize_media(os.path.join(directory, "last.mp4"))
+                parts = sorted(str(path) for path in Path(directory).glob("timing.part*.mp4"))
+                session = SimpleNamespace(
+                    muxer=muxer, delivery_outputs={}, delivery_sources={},
+                    output_files=[], output_sizes={}, uploaded_parts=set(),
+                )
+                uploader = Uploader(session)
+                with patch.object(uploader, "write_manifest"):
+                    outputs = uploader.prepare_delivery(parts, "final")
+                self.assertEqual(len(outputs), 2)
+                for output in outputs:
+                    probe = subprocess.run(
+                        [str(FFPROBE), "-v", "error", "-show_streams", "-show_format",
+                         "-of", "json", output],
+                        capture_output=True, text=True, check=True, timeout=30,
+                    )
+                    data = json.loads(probe.stdout)
+                    self.assertAlmostEqual(float(data["format"]["duration"]), 6, delta=0.3)
+                    for stream in data["streams"]:
+                        self.assertAlmostEqual(float(stream["duration"]), 6, delta=0.3)
+            finally:
+                muxer.close_all()
+                muxer.close_logs()
+
     def test_resolution_and_source_switch_produces_one_av_mp4(self) -> None:
         with tempfile.TemporaryDirectory() as directory, patch(
             "livestream.muxer.get_ffmpeg_path", return_value=str(FFMPEG)
