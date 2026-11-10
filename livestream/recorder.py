@@ -35,6 +35,7 @@ from .muxer import MuxerManager, VIDEO_CRF, valid_media
 from .uploader import Uploader
 from .event_handler import EventHandler
 from .broadcast import install_broadcast_fix
+from .call_cache import cached_call_id, install_call_cache_fix, refresh_call_cache
 
 from config import (
     AUDIO_CHANNELS,
@@ -449,6 +450,8 @@ class StreamRecorder:
                 raise RuntimeError("Call client preparation timed out after 60 seconds") from exc
             session.call_client = call_client
 
+            refresh_call_cache(call_client, int(channel_id))
+
             session.capture_started.set()
             logger.info("Joining livestream: user=%s chat=%s recording=%s",
                         user_id, channel_id, session.recording_id)
@@ -460,6 +463,10 @@ class StreamRecorder:
                 ), timeout=RECORDING_START_TIMEOUT)
             except asyncio.TimeoutError as exc:
                 raise RuntimeError("Livestream connection timed out after 60 seconds") from exc
+            joined_call_id = cached_call_id(call_client, int(channel_id))
+            if joined_call_id is not None:
+                session.telegram_call_id = joined_call_id
+                session.uploader.write_manifest()
             # Stay in WAITING — transition to CAMERA/SCREEN_SHARE happens
             # in EventHandler when the first video frame arrives.
             logger.info(
@@ -553,6 +560,7 @@ class StreamRecorder:
 
         call_client = PyTgCalls(client)
         install_broadcast_fix(call_client)
+        install_call_cache_fix(call_client)
 
         @call_client.on_update()
         async def recorder_update(_: PyTgCalls, update: Any) -> None:

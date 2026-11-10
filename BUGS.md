@@ -1,5 +1,28 @@
 # Xatolar va yechimlar
 
+## BUG-020 — Reusing a channel after its stream ended could join a stale call
+
+- Evidence (2026-11-10): chat -1003909347145 recording #16 ended at 16:36:37;
+  Telegram also rejected leave with GROUPCALL_FORBIDDEN. Starts #19/#20 at
+  17:03:57/17:04:33 passed fresh application discovery but JoinGroupCall returned
+  GROUPCALL_INVALID. Recordings #17/#18 in other chats continued receiving audio.
+- Cause in code consistent with this sequence: cached PyTgCalls clients retain
+  their own InputGroupCall/participants/DC for one hour, independently of bot
+  discovery. A failed leave can bypass cache clearing. Its join implementation
+  refreshes GROUPCALL_FORBIDDEN, but GROUPCALL_INVALID leaves stale cache intact.
+  Old/new wire call IDs were not logged, so the exact failed request is not
+  independently proven to use the old ID.
+- Fix: drop only the selected chat's bridge cache before each new recording.
+  An instance-local join shim refreshes that chat and retries GROUPCALL_INVALID
+  once, covering replacement between discovery and joining. Persistent errors
+  propagate; FloodWait is never retried by this shim. Record the joined call ID
+  for watchdog/event routing if the call changed during joining. No package edits, account
+  disconnects or changes to other chats' active sessions.
+- Regression: real ClientCache with mocked Telegram confirms new call and
+  participant identity, other-chat isolation, single retry, installation
+  idempotence and unchanged FloodWait propagation.
+- Activation pending: live service was not restarted because #17/#18 are active.
+
 ## BUG-019 — Waiting detected a livestream but connection could hang indefinitely
 
 - Evidence (2026-11-10): service 31110 created recording #13 at 16:02:28 for

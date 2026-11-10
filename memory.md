@@ -1,5 +1,18 @@
 # memory.md — Loyiha Xotirasi va Qarorlar Jurnali
 
+### Reused channel and GROUPCALL_INVALID (2026-11-10)
+- #16 in -1003909347145 ended at 16:36; subsequent #19/#20 JoinGroupCall failed
+  at 17:03/17:04 despite fresh application discovery. The reused PyTgCalls
+  bridge has an independent one-hour call cache, which failed leave can retain.
+- livestream/call_cache.py invalidates only the selected chat before a new
+  recording; an instance-local join shim refreshes/retries GROUPCALL_INVALID
+  once. FloodWait and repeated failures propagate normally. BUG-020 records
+  evidence and the limitation that old/new wire call IDs were not logged.
+- #17 and #18 continue recording other channels. No restart, account disconnect
+  or real Telegram test messages. Live activation awaits a safe restart.
+- The post-join call ID is persisted for watchdog/event routing after a call
+  replacement. All 174 isolated tests passed with FFmpeg on PATH; diff check clean.
+
 ### Waiting start stalled before capture (2026-11-10)
 - Service 31110 / #13: detected live at 16:02:28, audio encoder opened, but no
   joined log or media by 16:23. Exact blocked stage was absent from old logs.

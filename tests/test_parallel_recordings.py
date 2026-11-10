@@ -63,6 +63,13 @@ class ParallelRecorderTests(unittest.IsolatedAsyncioTestCase):
         self.assertIs(first, again)
         self.assertEqual(len(self.recorder.active_sessions), 1)
 
+    async def test_watchdog_identity_tracks_call_replaced_during_join(self):
+        with patch.object(module, 'cached_call_id', return_value=66):
+            session = await self.recorder.start_recording(
+                7, -1001, 'A', self.primary, telegram_call_id=55)
+        self.assertEqual(session.telegram_call_id, 66)
+        self.assertEqual(session.uploader.write_manifest.call_count, 2)
+
     async def test_hung_join_times_out_and_frees_only_failed_recording(self):
         other = await self.recorder.start_recording(7, -1002, 'B', self.extra)
         cancelled = asyncio.Event()
