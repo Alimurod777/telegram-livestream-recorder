@@ -1,5 +1,20 @@
 # memory.md — Loyiha Xotirasi va Qarorlar Jurnali
 
+### Waiting start stalled before capture (2026-11-10)
+- Service 31110 / #13: detected live at 16:02:28, audio encoder opened, but no
+  joined log or media by 16:23. Exact blocked stage was absent from old logs.
+- Preparation and join now each have a 60s deadline and stage logs; failed-start
+  leave cleanup has a 10s bound. Only the failed session is removed, freeing
+  account capacity for the waiting probe's retry. Other recordings continue.
+- Probe failures are WARNING diagnostics with a stable key and a deduplicated
+  owner notice; fallback success enables the existing automatic confirmation.
+- BUG-019 and mocked regression tests cover timeout cleanup and waiting retries.
+  No real Telegram messages or live service restart were performed. This fixes
+  unbounded waiting; the underlying native/Telegram connection failure still
+  needs live verification after safe activation.
+- Validation: all 169 isolated tests passed with installed FFmpeg/FFprobe on
+  PATH; git diff --check clean.
+
 ### #3 duration discrepancy and live deployment status (2026-11-05)
 - #3 ran from 17:22 to 18:45 (1h22m17s) and delivered at 18:47 with 1h32m40s
   media duration. The service was still running OLD code: integer declared_fps

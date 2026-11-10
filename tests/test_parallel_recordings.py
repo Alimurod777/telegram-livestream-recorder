@@ -63,6 +63,40 @@ class ParallelRecorderTests(unittest.IsolatedAsyncioTestCase):
         self.assertIs(first, again)
         self.assertEqual(len(self.recorder.active_sessions), 1)
 
+    async def test_hung_join_times_out_and_frees_only_failed_recording(self):
+        other = await self.recorder.start_recording(7, -1002, 'B', self.extra)
+        cancelled = asyncio.Event()
+
+        async def stalled(*args, **kwargs):
+            try:
+                await asyncio.Event().wait()
+            finally:
+                cancelled.set()
+
+        call = SimpleNamespace(record=AsyncMock(side_effect=stalled))
+        with patch.object(module, 'RECORDING_START_TIMEOUT', 0.01), \
+                patch.object(self.recorder, '_get_call_client', AsyncMock(return_value=call)):
+            with self.assertRaisesRegex(RuntimeError, 'Livestream connection timed out'):
+                await self.recorder.start_recording(7, -1001, 'A', self.primary)
+        self.assertTrue(cancelled.is_set())
+        self.assertIsNone(self.recorder.get_session(7, -1001))
+        self.assertEqual(self.recorder.get_sessions(7), [other])
+        self.assertFalse(other.stop_event.is_set())
+        self.recorder._leave_call.assert_awaited_once_with(call, -1001)
+        module.db.finish_recording.assert_called_once()
+
+    async def test_hung_client_preparation_does_not_reserve_account_forever(self):
+        async def stalled(*args):
+            await asyncio.Event().wait()
+
+        with patch.object(module, 'RECORDING_START_TIMEOUT', 0.01), \
+                patch.object(self.recorder, '_get_call_client', AsyncMock(side_effect=stalled)):
+            with self.assertRaisesRegex(RuntimeError, 'Call client preparation timed out'):
+                await self.recorder.start_recording(7, -1001, 'A', self.primary)
+        self.assertFalse(self.recorder.account_is_busy(self.primary))
+        self.recorder._leave_call.assert_not_awaited()
+        module.db.finish_recording.assert_called_once()
+
     async def test_busy_primary_automatically_uses_second_owned_account(self):
         call = SimpleNamespace(id=55)
         with patch.object(self.bot, 'resolve_chat', AsyncMock(return_value=object())), patch.object(self.bot, 'get_channel_call', AsyncMock(return_value=call)), patch.object(self.bot.account_manager, 'pick_account', AsyncMock(return_value=(self.extra, 20))), patch.object(self.bot.account_manager, 'mark_free') as free:

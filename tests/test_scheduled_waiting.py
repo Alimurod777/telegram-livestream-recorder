@@ -95,6 +95,33 @@ class ScheduledWaitingTests(unittest.IsolatedAsyncioTestCase):
         start.assert_awaited_once()
         self.assertIs(start.call_args.kwargs["known_call"], call)
         self.assertEqual(start.call_args.kwargs["initial_account_id"], 20)
+        self.assertTrue(start.call_args.kwargs["automatic"])
+        delete.assert_called_once_with(7)
+
+    async def test_failed_start_keeps_waiting_and_retries_without_repeated_error_notice(self):
+        waiting = {"channel_id": -1002, "title": "B", "chat_id": 7}
+        client, call = object(), object()
+        waits = []
+
+        async def next_probe(state):
+            self.assertIs(self.bot.waiting_sessions[7], waiting)
+            waits.append(state)
+
+        with patch.dict(self.bot.waiting_sessions, {7: waiting}, clear=True), \
+                patch.object(self.bot.stream_recorder, "get_session", return_value=None), \
+                patch.object(self.bot, "get_user_client", AsyncMock(return_value=client)), \
+                patch.object(self.bot, "resolve_record_target", AsyncMock(return_value=(
+                    client, None, SimpleNamespace(_recorder_schedule_date=None), call))), \
+                patch.object(self.bot, "start_recording_for_user", AsyncMock(side_effect=[
+                    RuntimeError('connection timed out'), RuntimeError('connection timed out'), object()])) as start, \
+                patch.object(self.bot, "send_message", AsyncMock()) as send, \
+                patch.object(self.bot.db, "delete_waiting") as delete, \
+                patch.object(self.bot, "wait_for_next_probe", side_effect=next_probe):
+            await self.bot.wait_probe_loop(7, -1002)
+        self.assertEqual(len(waits), 2)
+        self.assertEqual(start.await_count, 3)
+        notices = [args.args[1] for args in send.await_args_list if '⚠️' in args.args[1]]
+        self.assertEqual(len(notices), 1)
         delete.assert_called_once_with(7)
 
     async def test_probe_cancellation_does_not_start_recording(self):

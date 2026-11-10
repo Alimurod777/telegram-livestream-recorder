@@ -1722,7 +1722,7 @@ async def wait_probe_loop(user_id: int, channel_id: int) -> None:
                     client=client,
                     channel_id=channel_id,
                     channel_title=waiting["title"],
-                    automatic=False,
+                    automatic=True,
                     known_call=call,
                     initial_account_id=selected_account,
                 )
@@ -1734,7 +1734,13 @@ async def wait_probe_loop(user_id: int, channel_id: int) -> None:
             await asyncio.sleep(max(1, _flood_seconds(exc)))
             continue
         except Exception as exc:
-            logger.debug("Wait probe failed for %s: %s", channel_id, exc)
+            logger.warning("Wait probe/start failed: user=%s chat=%s: %s", user_id, channel_id, exc,
+                           extra={"diagnostic_key": f"waiting-start:{user_id}:{channel_id}"})
+            if waiting.get("last_start_error") != str(exc):
+                waiting["last_start_error"] = str(exc)
+                await send_message(waiting["chat_id"],
+                    "⚠️ Efirni tekshirish yoki unga ulanishda xato bo‘ldi. "
+                    "Avtomatik qayta urinaman. Bekor qilish: /stop waiting")
         await wait_for_next_probe(waiting)
 
 

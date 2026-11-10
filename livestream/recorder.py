@@ -52,6 +52,7 @@ MAX_RECORDING_SECONDS = min(14400, max(1, int(getattr(_config, "MAX_RECORDING_SE
 WATCHDOG_INTERVAL = int(getattr(_config, "WATCHDOG_INTERVAL", 30))
 REJOIN_COOLDOWN = int(getattr(_config, "REJOIN_COOLDOWN", 60))
 FRAME_TIMEOUT_WARN = int(getattr(_config, "FRAME_TIMEOUT_WARN", 180))
+RECORDING_START_TIMEOUT = 60
 
 CompletionCallback = Callable[["RecordingSession"], Awaitable[None]]
 NotifyCallback = Callable[[int, str], Awaitable[None]]
@@ -438,15 +439,27 @@ class StreamRecorder:
                 process, session.capture_started, session.stop_event
             )
 
-            call_client = await self._get_call_client(user_id, client)
+            logger.info("Preparing call client: user=%s chat=%s recording=%s",
+                        user_id, channel_id, session.recording_id)
+            try:
+                call_client = await asyncio.wait_for(
+                    self._get_call_client(user_id, client), timeout=RECORDING_START_TIMEOUT
+                )
+            except asyncio.TimeoutError as exc:
+                raise RuntimeError("Call client preparation timed out after 60 seconds") from exc
             session.call_client = call_client
 
             session.capture_started.set()
-            await call_client.record(
-                int(channel_id),
-                stream=self._build_record_stream(is_video),
-                config=GroupCallConfig(auto_start=False),
-            )
+            logger.info("Joining livestream: user=%s chat=%s recording=%s",
+                        user_id, channel_id, session.recording_id)
+            try:
+                await asyncio.wait_for(call_client.record(
+                    int(channel_id),
+                    stream=self._build_record_stream(is_video),
+                    config=GroupCallConfig(auto_start=False),
+                ), timeout=RECORDING_START_TIMEOUT)
+            except asyncio.TimeoutError as exc:
+                raise RuntimeError("Livestream connection timed out after 60 seconds") from exc
             # Stay in WAITING — transition to CAMERA/SCREEN_SHARE happens
             # in EventHandler when the first video frame arrives.
             logger.info(
@@ -475,7 +488,13 @@ class StreamRecorder:
             session.stop_event.set()
 
             if call_client:
-                await self._leave_call(call_client, session.channel_id)
+                try:
+                    await asyncio.wait_for(
+                        self._leave_call(call_client, session.channel_id), timeout=10
+                    )
+                except asyncio.TimeoutError:
+                    logger.warning("Timed out leaving failed start: user=%s chat=%s",
+                                   user_id, channel_id)
 
             await asyncio.to_thread(session.audio_mixer.join_writer)
             await asyncio.to_thread(session.muxer.close_all)

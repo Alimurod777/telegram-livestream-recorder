@@ -1,5 +1,27 @@
 # Xatolar va yechimlar
 
+## BUG-019 — Waiting detected a livestream but connection could hang indefinitely
+
+- Evidence (2026-11-10): service 31110 created recording #13 at 16:02:28 for
+  chat -1002082401790, opened an audio encoder and printed the PyTgCalls banner.
+  By 16:23 no `Capture joined` log, media files or frames existed. The manifest
+  remained waiting. Existing logs cannot identify the exact blocked await or
+  establish the underlying Telegram/native transport failure.
+- Cause in application: call-client preparation and `record()` had no deadline.
+  PyTgCalls 2.2.8's native connection future can wait without a timeout, leaving
+  the account/session and owner start lock occupied before watchdogs are armed.
+  Probe errors were DEBUG-only, and fallback success had no confirmation message.
+- Fix: bound preparation and join separately to 60s, log each stage, and bound
+  failed-start leave cleanup to 10s. Existing failed-start cleanup cancels the
+  attempt, closes encoders, finishes history and removes only its own session.
+  Waiting remains armed for retry; failures are visible in diagnostics and one
+  user notice per distinct error. Successful fallback now confirms the start.
+- Regression: stalled preparation/join release capacity and preserve another
+  recording; failed probes retain waiting and retry without duplicate error
+  notices; success requests confirmation. Telegram calls are mocked.
+- Disk-only fix: service was not restarted and #13 was not recovered by this
+  change. A safe service restart is needed to load the new modules.
+
 ## BUG-018 — Tiny FPS estimates stretched a short recording into an hour
 
 - Evidence: recording #2 ran for 12m32s, with 4058 video frames. Logs repeatedly
