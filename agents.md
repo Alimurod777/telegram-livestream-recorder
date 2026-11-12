@@ -1,6 +1,6 @@
 # Current architecture and rules for all AI assistants
 
-Updated: 2026-11-03. This file is the current reference. Historical descriptions
+Updated: 2026-11-12. This file is the current reference. Historical descriptions
 in memory.md may describe earlier implementations; the rules below take priority
 when they conflict with old architecture notes.
 
@@ -155,6 +155,19 @@ waiting probes, including captures that committed just before cancellation.
 
 ## Diagnostics, configuration and security
 
+- Owner administration: `livestream/owner.py` controls `/owner`, `/ownerhelp`,
+  `/stats`, `/maintenance on|off|status` and `/logchannel`. Authenticate the
+  private chat and OWNER_ID before inspecting/changing settings. SQLite
+  `owner_settings` overrides MAINTENANCE_MODE/CHAT_LOG_CHANNEL_ID after restart.
+  Maintenance blocks new non-owner starts, including service/raw triggers and
+  persisted waiting probes. Preserve waits, existing captures, failover, uploads,
+  stop/status/send/cancel/logout/help. It never changes account capacity rules.
+- `livestream/chat_log.py` forwards private conversation/media through a bounded
+  asynchronous queue. Owner, auth flows, command arguments, credentials and
+  progress UI must never be forwarded. Policy revisions invalidate queued old
+  destinations/exclusions. Bot API and bot MTProto delivery observers must not
+  alter delivery success/fallback semantics. Conversation logging is separate
+  from LOG_CHANNEL_ID error diagnostics; disabling one must not disable the other.
 - Errors/warnings go first to `LOG_CHANNEL_ID` (aliases LOGS_ID/LOG_EXCEPTION),
   then to OWNER_ID's private bot chat if channel/group delivery fails.
   Missing chat (400) or forbidden access (403) pauses that target for 300s and

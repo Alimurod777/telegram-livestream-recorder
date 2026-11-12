@@ -28,6 +28,7 @@ class MtprotoUploader:
         self._bot_peer: Dict[int, Any] = {}  # id(client) -> Chat
         self._delivery_bot = None
         self._delivery_bot_lock = asyncio.Lock()
+        self.delivery_observer = None
 
     async def get_delivery_bot(self, api_id, api_hash, bot_token):
         async with self._delivery_bot_lock:
@@ -164,6 +165,14 @@ class MtprotoUploader:
                 )
             if result is None:
                 raise RuntimeError("Telegram did not confirm media delivery")
+            if recipient_id is not None and self.delivery_observer:
+                try:
+                    self.delivery_observer({'result': {
+                        'message_id': result.id, 'chat': {'id': recipient_id, 'type': 'private'},
+                        'caption': caption,
+                    }})
+                except Exception:
+                    logger.info('Delivery log observation failed', exc_info=True)
             return True
         finally:
             if thumb_path:

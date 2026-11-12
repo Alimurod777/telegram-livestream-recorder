@@ -94,6 +94,9 @@ OWNER_ID = int(os.getenv("OWNER_ID", "0").strip() or "0")
 LOGS_ID = int(os.getenv("LOGS_ID", "0").strip() or "0")
 LOG_EXCEPTION = int(os.getenv("LOG_EXCEPTION", "0").strip() or "0")
 LOG_CHANNEL_ID = int(os.getenv("LOG_CHANNEL_ID", "0").strip() or "0") or LOGS_ID or LOG_EXCEPTION
+# Owner-managed conversation forwards; error diagnostics retain LOG_CHANNEL_ID.
+CHAT_LOG_CHANNEL_ID = int(os.getenv("CHAT_LOG_CHANNEL_ID", "0").strip() or "0")
+MAINTENANCE_MODE = os.getenv("MAINTENANCE_MODE", "false").lower() in {"1", "true", "yes", "on"}
 LOG_DEDUP_SECONDS = max(0, int(os.getenv("LOG_DEDUP_SECONDS", "120")))
 FORCE_SUB_ENABLED = os.getenv("FORCE_SUB_ENABLED", "false").lower() in {"1", "true", "yes", "on"}
 SUBSCRIBE_CHANNEL = os.getenv("SUBSCRIBE_CHANNEL", "0").strip()

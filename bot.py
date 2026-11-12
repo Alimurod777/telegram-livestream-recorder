@@ -52,6 +52,9 @@ from livestream.client_lifecycle import track_client_updates
 from livestream.dispatcher import UserUpdateDispatcher
 from livestream.diagnostics import TelegramDiagnostics, request_context, sanitize
 from livestream.subscription import SubscriptionGate
+from livestream.chat_log import ChatLogger
+from livestream.owner import (OwnerControls, OWNER_COMMANDS, SAFE_COMMANDS,
+                              MAINTENANCE_NOTICE, MaintenanceActive)
 from livestream.mtproto_uploader import mtproto_uploader
 from livestream.metadata import media_kind
 from stream_recorder import RecordingSession, stream_recorder
@@ -78,6 +81,8 @@ logging.basicConfig(
     handlers=[logging.StreamHandler(), _log_handler],
 )
 logger = logging.getLogger(__name__)
+chat_logger = ChatLogger(getattr(_config, 'OWNER_ID', 0), (BOT_TOKEN, API_HASH))
+owner_controls = OwnerControls(db, _config, chat_logger)
 
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
@@ -87,6 +92,7 @@ HELP_TEXT = (
     "*Commands*\n"
     "/start - botni ishga tushiradi\n"
     "/help - barcha komandalar va hozirgi cheklovni korsatadi\n"
+    "/ownerhelp - owner boshqaruv paneli (faqat owner)\n"
     "/login\\_qr - Telegram ichidan QR orqali login qiladi\n"
     "/login\\_phone - telefon raqam va kod bilan login qiladi\n"
     "/login - telefon orqali login (/login\\_phone bilan bir xil)\n"
@@ -149,6 +155,18 @@ class BotAPIError(RuntimeError):
         self.code = int(result.get("error_code") or 0)
         self.retry_after = int((result.get("parameters") or {}).get("retry_after") or 0)
         super().__init__(result.get("description") or "Bot API request failed")
+
+
+def observe_outgoing(result):
+    try:
+        message = result.get('result') if isinstance(result, dict) else None
+        if isinstance(message, dict):
+            uid = message.get('chat', {}).get('id')
+            sensitive = str(user_states.get(uid, '')).startswith('waiting_')
+            chat_logger.submit(message, outbound=True, sensitive=sensitive)
+    except Exception:
+        logger.info('Outgoing log observation failed', exc_info=True)
+    return result
 
 
 # ── Single-instance lock (PID file based, crash-safe) ────────────────────────
@@ -450,7 +468,7 @@ async def send_message(chat_id: int, text: str, keyboard: Optional[str] = None):
             payload["reply_markup"] = keyboard
         return bot_api("sendMessage", payload, timeout=10)
     try:
-        return await asyncio.to_thread(run)
+        return observe_outgoing(await asyncio.to_thread(run))
     except Exception as exc:
         # Only malformed Markdown benefits from changing parse_mode. Retrying a
         # timeout can duplicate a delivered message and blocks this user's queue.
@@ -460,7 +478,7 @@ async def send_message(chat_id: int, text: str, keyboard: Optional[str] = None):
             return None
         logger.warning("Markdown message to %s failed, retrying plain text: %s", chat_id, exc)
         try:
-            return await asyncio.to_thread(run, False)
+            return observe_outgoing(await asyncio.to_thread(run, False))
         except Exception as plain_exc:
             logger.error("send_message to %s failed: %s", chat_id, plain_exc)
 
@@ -618,10 +636,10 @@ async def send_recording_file(
 
     async def attempt(m: str, f_field: str, f_fields: Dict[str, Any],
                       f_extra: Optional[Dict[str, tuple]]):
-        return await asyncio.to_thread(
+        return observe_outgoing(await asyncio.to_thread(
             bot_api_upload_file, m, f_fields, f_field, file_path,
             extra_files=f_extra, on_progress=on_progress,
-        )
+        ))
 
     last_error: Optional[Exception] = None
     for attempt_no in range(1, 4):
@@ -686,6 +704,8 @@ def attach_user_client_handlers(user_id: int, client: Client) -> None:
         match = waiting and waiting["channel_id"] == channel_id
         if not match:
             return
+        if owner_controls.blocked(user_id):
+            return
 
         title = (
             (waiting or {}).get("title")
@@ -743,6 +763,8 @@ def attach_user_client_handlers(user_id: int, client: Client) -> None:
             return
         if getattr(update.call, "schedule_date", None):
             update_wait_schedule(waiting, update.call.schedule_date)
+            return
+        if owner_controls.blocked(user_id):
             return
         try:
             await start_recording_for_user(
@@ -1071,6 +1093,8 @@ async def start_recording_for_user(
     """
     lock = user_client_locks.setdefault(user_id, asyncio.Lock())
     async with lock:
+        if owner_controls.blocked(user_id):
+            raise MaintenanceActive(MAINTENANCE_NOTICE)
         current = stream_recorder.get_session(user_id, channel_id)
         if current:
             return current
@@ -1689,6 +1713,9 @@ async def wait_probe_loop(user_id: int, channel_id: int) -> None:
         waiting = waiting_sessions.get(user_id)
         if not waiting or waiting["channel_id"] != channel_id:
             return
+        if owner_controls.blocked(user_id):
+            await wait_for_next_probe(waiting)
+            continue
         if stream_recorder.get_session(user_id, channel_id):
             waiting_sessions.pop(user_id, None)
             await asyncio.to_thread(db.delete_waiting, user_id)
@@ -2269,8 +2296,8 @@ async def handle_update(update: Dict[str, Any]):
         return
     # Keep command arguments (sessions, phone numbers, passwords) out of diagnostics.
     text = payload.get("text", "")
-    command = text.split(maxsplit=1)[0].split("@", 1)[0] if text.startswith("/") else "text"
-    if command not in {"/start", "/help", "/login", "/login_qr", "/login_phone", "/login_session", "/target", "/record", "/send", "/stop", "/status", "/accounts", "/addaccount", "/delaccount", "/logout", "/cancel", "/join"}:
+    command = text.split(maxsplit=1)[0].split("@", 1)[0].lower() if text.startswith("/") else "text"
+    if command not in OWNER_COMMANDS | {"/start", "/help", "/login", "/login_qr", "/login_phone", "/login_session", "/target", "/record", "/send", "/stop", "/status", "/accounts", "/addaccount", "/delaccount", "/logout", "/cancel", "/join"}:
         command = "text"
     token = request_context.set(f"user={user_id} update={update.get('update_id')} command={command}")
     started = time.monotonic()
@@ -2279,6 +2306,19 @@ async def handle_update(update: Dict[str, Any]):
         logger.info("Command received update=%s command=%s age=%.1fs",
                     update.get("update_id"), command, max(0, time.time() - sent_at))
     try:
+        await owner_controls.load()
+        if not update.get('callback_query') and command in OWNER_COMMANDS:
+            await owner_controls.handle(user_id, text, bot_api, send_message, stream_recorder, waiting_sessions)
+            return
+        if owner_controls.blocked(user_id) and (update.get('callback_query') or command not in SAFE_COMMANDS):
+            if update.get('callback_query'):
+                await answer_callback_query(payload.get('id', ''), MAINTENANCE_NOTICE)
+            else:
+                await send_message(user_id, MAINTENANCE_NOTICE)
+            return
+        if not update.get('callback_query'):
+            sensitive = str(user_states.get(user_id, '')).startswith('waiting_')
+            chat_logger.submit(payload, sensitive=sensitive)
         gate = SubscriptionGate(bot_api, enabled=getattr(_config, "FORCE_SUB_ENABLED", False),
                                 channel=getattr(_config, "SUBSCRIBE_CHANNEL", 0),
                                 url=getattr(_config, "SUBSCRIBE_CHANNEL_URL", ""),
@@ -2526,6 +2566,9 @@ async def _run_bot():
 
 
 async def main():
+    await owner_controls.load()
+    chat_logger.start(bot_api)
+    mtproto_uploader.delivery_observer = observe_outgoing
     diagnostics = TelegramDiagnostics(
         bot_api, channel_id=getattr(_config, "LOG_CHANNEL_ID", 0),
         owner_id=getattr(_config, "OWNER_ID", 0),
@@ -2553,6 +2596,8 @@ async def main():
         logger.exception("Bot runtime failed")
         raise
     finally:
+        await chat_logger.stop()
+        mtproto_uploader.delivery_observer = None
         loop.set_exception_handler(previous)
         if enabled:
             # Flush records already scheduled by emit before draining the queue.

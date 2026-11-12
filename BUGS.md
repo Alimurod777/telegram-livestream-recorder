@@ -1,5 +1,22 @@
 # Xatolar va yechimlar
 
+## Owner/maintenance and conversation logging regression guards (2026-11-12)
+
+- A command-only maintenance gate would leave persisted probes and Telegram
+  service/raw start triggers able to create recordings. The recorder start
+  helper now checks maintenance, and waiting probes pause without deleting
+  targets. Existing recording finalization/failover/delivery remain unrestricted.
+- Mirroring every private message would expose login input, owner conversations,
+  session commands and QR codes. The conversation logger excludes these paths,
+  masks detected secrets and forwards ordinary media without download/reupload.
+- Queued logs could otherwise reach an old destination or a newly excluded user.
+  Revisions and an in-flight delivery lock invalidate old queued events on policy
+  changes. Logging failures cannot change confirmed media delivery success.
+- Mocked regression coverage: unauthorized owner commands; persistence/restart;
+  failed write and invalid channel permissions; ENV reset with exclusions;
+  maintenance command/callback/start/waiting gates; log redaction, duplicates,
+  queue bounds and delivery failures. Telegram is not contacted by these tests.
+
 ## BUG-020 — Reusing a channel after its stream ended could join a stale call
 
 - Evidence (2026-11-10): chat -1003909347145 recording #16 ended at 16:36:37;

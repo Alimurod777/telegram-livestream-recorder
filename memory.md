@@ -1,5 +1,31 @@
 # memory.md — Loyiha Xotirasi va Qarorlar Jurnali
 
+### Owner controls, maintenance and conversation log (2026-11-12)
+- Adapted savebotnew/TechVJ/maintenance.py, owner_commands.py and core/chat_log.py
+  to manual urllib Bot API, per-owner dispatch and the recorder's SQLite DB.
+- `/owner` / `/ownerhelp`, `/stats`, `/maintenance on|off|status` and
+  `/logchannel set|on|off|remove|reset|test|status|exclude|include|excluded` are
+  available only to authenticated private-chat OWNER_ID. No roles/ban/session
+  sharing subsystem was imported; Telegram account capacity remains fixed at 1.
+- Maintenance blocks new non-owner commands/callbacks and automatic waiting
+  starts, preserving waiting targets and active captures/delivery/failover.
+  Stop/status/send/cancel/logout/help stay available under existing subscription
+  rules. Owner can use the bot normally.
+- SQLite owner_settings persists maintenance and conversation log overrides;
+  MAINTENANCE_MODE/CHAT_LOG_CHANNEL_ID are startup defaults. Reset follows ENV
+  after restart while retaining excluded users. Settings are local, not Mongo
+  portable; migrating only Mongo login storage does not migrate these settings.
+- Native conversation/media forwards use a separate bounded async worker with
+  policy revisions, owner exclusions, authentication/credential filtering and
+  stable headers. Bot API and bot-MTProto outgoing media are observed; user-
+  session uploads arrive via incoming Bot API updates. Progress edits and login
+  QR photos are excluded. Forward failures never trigger media upload retries.
+- Existing LOG_CHANNEL_ID diagnostics/fallback/dedup remain independent of the
+  conversation destination. No credentials, real messages or live restart were
+  used to test this change. New modules load at the next safe service restart.
+- Validation: all 190 isolated tests passed with installed FFmpeg/FFprobe on
+  PATH; git diff --check clean.
+
 ### Reused channel and GROUPCALL_INVALID (2026-11-10)
 - #16 in -1003909347145 ended at 16:36; subsequent #19/#20 JoinGroupCall failed
   at 17:03/17:04 despite fresh application discovery. The reused PyTgCalls

@@ -161,3 +161,60 @@ Muammo bo‘lsa `/status`ni tekshiring. Operatorga log kanalidagi `incident=...`
 ID yordam beradi. Hisobot avval log kanal/guruhga, yuborish ishlamasa ownerning
 bot chatiga ketadi. `FloodWait` chiqsa ko‘rsatilgan muddatni kuting; ketma-ket
 yangi so‘rovlar yuborish o‘rniga mavjud so‘rov holatini tekshiring.
+
+## 9. Owner boshqaruvi va maintenance
+
+`.env`dagi `OWNER_ID` bot operatorining Telegram IDsi bo‘lishi kerak. Faqat shu
+foydalanuvchi shaxsiy chatda `/owner` yoki `/ownerhelp` panelini ochadi:
+
+```text
+/maintenance on
+/maintenance status
+/maintenance off
+/stats
+```
+
+Maintenance ownerdan boshqa foydalanuvchilarning yangi yozuv, login va akkaunt
+so‘rovlarini hamda callback tugmalarini bloklaydi. Mavjud yozuvlar va fayl yuborish
+davom etadi. `/stop`, `/status`, `/send`, `/cancel`, `/logout`, `/help` ochiq qoladi;
+majburiy obunaning amaldagi qoidalari saqlanadi. Kutish rejimidagi yangi yozuvlar
+maintenance o‘chguncha boshlanmaydi; kutish manzili saqlanadi. Owner botdan
+foydalanishda davom etadi; bir Telegram akkaunt uchun bitta efir cheklovi qoladi.
+
+### Suhbat log kanali
+
+Botni log kanal yoki guruhiga admin qiling; kanalda xabar yuborish huquqini bering:
+
+```text
+/logchannel set -1001234567890
+/logchannel test
+/logchannel status
+/logchannel exclude 123456789
+/logchannel include 123456789
+/logchannel excluded
+/logchannel off
+/logchannel on
+```
+
+`set @kanal` ham ishlaydi. Manzil va bot huquqlari saqlashdan oldin tekshiriladi.
+Owner chati doim istisno; uni `include` bilan yoqib bo‘lmaydi. Oddiy user xabarlari,
+botning matn javoblari va yetkazilgan media Telegram orqali forward qilinadi;
+media qayta yuklanmaydi. Buyruqlar, login jarayoni, kodlar, parollar, session
+stringlar va takroriy progress xabarlari suhbat logiga tushmaydi. Matnda aniqlangan
+maxfiy maydonlar maskalanib matn sifatida yuboriladi. Log ishlamasa, userga fayl
+yetkazish davom etadi. Himoyalangan xabarni Telegram forward qilishni rad etsa,
+logdagi nusxa tashlab ketiladi. `/logchannel status` navbat va xato hisobini ko‘rsatadi.
+
+`/logchannel remove` ENVda manzil bo‘lsa ham suhbat logini o‘chiradi.
+`/logchannel reset` `CHAT_LOG_CHANNEL_ID` qiymatiga qaytaradi; user istisnolari
+saqlanadi. Bu sozlama berilmasa suhbat logi boshida o‘chiq.
+
+Maintenance va suhbat log sozlamalari `recorder.db` SQLite bazasida saqlanadi va
+restartdan keyin tiklanadi. Serverni ko‘chirganda shu bazani ham ko‘chiring;
+MongoDBdagi login sessiyalarining o‘zi bu sozlamalarni ko‘chirmaydi.
+`MAINTENANCE_MODE=false` faqat bazada owner override bo‘lmaganida boshlang‘ich
+qiymatdir. `.env` o‘zgarishi owner saqlagan sozlamani almashtirmaydi.
+
+Xato va ogohlantirish diagnostikasi alohida: `LOG_CHANNEL_ID` (yoki `LOGS_ID`,
+`LOG_EXCEPTION`) va owner fallback avvalgidek ishlaydi. `/logchannel off` xato
+diagnostikasini o‘chirmaydi. Ikkalasiga bir xil kanal ID qo‘yish mumkin.

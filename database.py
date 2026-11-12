@@ -7,6 +7,7 @@ import os
 import tempfile
 import time
 import logging
+import json
 from pathlib import Path
 import config
 from contextlib import contextmanager
@@ -98,6 +99,7 @@ class Database:
 
     def _init_database(self):
         with self._get_connection() as conn:
+            conn.execute("CREATE TABLE IF NOT EXISTS owner_settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)")
             cursor = conn.cursor()
             cursor.execute(
                 """
@@ -165,6 +167,20 @@ class Database:
             waiting_columns = {row[1] for row in cursor.execute("PRAGMA table_info(waiting_streams)")}
             if "account_id" not in waiting_columns:
                 cursor.execute("ALTER TABLE waiting_streams ADD COLUMN account_id INTEGER")
+
+    def get_owner_settings(self) -> dict:
+        with self._get_connection() as conn:
+            return {row['key']: json.loads(row['value']) for row in conn.execute('SELECT key, value FROM owner_settings')}
+
+    def set_owner_setting(self, key: str, value) -> None:
+        with self._get_connection() as conn:
+            conn.execute('INSERT OR REPLACE INTO owner_settings (key, value) VALUES (?, ?)',
+                         (key, json.dumps(value)))
+
+    def owner_stats(self) -> dict:
+        with self._get_connection() as conn:
+            return {table: conn.execute(f'SELECT COUNT(*) FROM {table}').fetchone()[0]
+                    for table in ('user_sessions', 'accounts', 'recordings', 'waiting_streams')}
 
     def save_waiting(self, user_id: int, channel_id: int, title: str, account_id: Optional[int] = None) -> None:
         with self._get_connection() as conn:

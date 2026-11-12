@@ -115,6 +115,14 @@ request konteksti yondashuvi shu botning urllib + asyncio arxitekturasiga moslan
   Nol bo‘lsa `LOGS_ID`, undan keyin `LOG_EXCEPTION` olinadi.
 - `OWNER_ID`: log manziliga yuborish muvaffaqiyatsiz bo‘lsa, bot ownerga yozadi.
   Owner avval botga `/start` yuborgan bo‘lishi kerak.
+- `/owner` yoki `/ownerhelp`: faqat `OWNER_ID` uchun maintenance, statistika va
+  suhbat log boshqaruvi. `/maintenance on|off` mavjud yozuvlarni davom ettiradi,
+  ownerdan boshqa userlarning yangi ishlarini vaqtincha bloklaydi.
+- `/logchannel set <ID|@username>`: owner boshqaradigan suhbat logi;
+  `on|off|remove|reset|test|status`, `exclude|include <user_id>` ham bor.
+  `CHAT_LOG_CHANNEL_ID` boshlang‘ich manzil (standart: o‘chiq), `MAINTENANCE_MODE`
+  boshlang‘ich maintenance holati. Owner sozlamalari SQLite’da saqlanadi.
+  [To‘liq qo‘llanma](docs/FOYDALANISH.md#9-owner-boshqaruvi-va-maintenance).
 - `LOG_DEDUP_SECONDS=120`: bir xil xabar va user/komanda uchun takroriy hisobot oralig‘i.
 - `FORCE_SUB_ENABLED=true`, `SUBSCRIBE_CHANNEL=-100...` yoki `@username`,
   `SUBSCRIBE_CHANNEL_URL=https://t.me/...`: majburiy obuna va tekshirish tugmasi.

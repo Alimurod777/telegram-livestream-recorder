@@ -116,3 +116,14 @@ class DeliveryFallbackTests(unittest.IsolatedAsyncioTestCase):
             await uploader.send(client, "", "video.mp4", "caption", {"has_video": True, "duration": 2}, recipient_id=1)
         generate.assert_called_once_with("video.mp4", 1.0)
         self.assertFalse(Path(client.send_video.call_args.kwargs["thumb"]).exists())
+
+    async def test_delivery_log_uses_recipient_message_id_and_failure_does_not_retry_upload(self):
+        uploader = MtprotoUploader()
+        uploader.delivery_observer = Mock(side_effect=RuntimeError('log offline'))
+        client = SimpleNamespace(resolve_peer=AsyncMock(),
+                                 send_document=AsyncMock(return_value=SimpleNamespace(id=42)))
+        result = await uploader.send(client, '', 'recording.bin', 'caption', {}, recipient_id=7)
+        self.assertTrue(result)
+        client.send_document.assert_awaited_once()
+        uploader.delivery_observer.assert_called_once_with({'result': {
+            'message_id': 42, 'chat': {'id': 7, 'type': 'private'}, 'caption': 'caption'}})
