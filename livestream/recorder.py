@@ -407,6 +407,9 @@ class StreamRecorder:
         self._loop = asyncio.get_running_loop()
         async with self._state_lock:
             current = self.get_session(user_id, int(channel_id))
+            if current and getattr(current, "finalizing", False):
+                # A stopping session cannot capture; never report it as a started recording.
+                raise RuntimeError("Bu chatning oldingi yozuvi hali yakunlanmoqda; birozdan so‘ng qayta urinib ko‘ring")
             if current:
                 return current
             identity = getattr(getattr(client, "me", None), "id", None)
@@ -746,14 +749,21 @@ class StreamRecorder:
         )
         last_error: Optional[Exception] = None
         for _ in range(3):
+            if getattr(session, "finalizing", False):
+                return
             try:
                 if not session.call_client:
                     raise RuntimeError("Call client is unavailable")
-                await session.call_client.record(
+                call_client = session.call_client
+                await call_client.record(
                     int(session.channel_id),
                     stream=self._build_record_stream(is_video),
                     config=GroupCallConfig(auto_start=False),
                 )
+                if getattr(session, "finalizing", False):
+                    # Stop began mid-join and already left once; do not stay in the call.
+                    await self._leave_call(call_client, session.channel_id)
+                    return
                 await self._notify(
                     session.user_id,
                     f"⚠️ Connection to the stream was lost — rejoined "
@@ -842,7 +852,10 @@ class StreamRecorder:
         session.finalizing = True
         session.state_machine.transition(RecorderState.STOPPING)
         session.stop_reason = reason
-        session.uploader.write_manifest()
+        try:
+            session.uploader.write_manifest()
+        except Exception:
+            logger.exception("Could not write stop manifest for user %s", session.user_id)
 
         for task in (session._rotation_task, session._watchdog_task, session._duration_task):
             if task and not task.done():
@@ -878,28 +891,34 @@ class StreamRecorder:
             session.status = "failed"
 
         finally:
-            self._event_handler.forget(session)
-            logger.info("[final] %s | stop_reason=%s", session.stats_line(), reason)
-            session.muxer.close_logs()
-            session.uploader.write_manifest()
+            # Bookkeeping failures must not leave a dead session registered:
+            # that would keep its account at capacity and block the chat forever.
+            try:
+                self._event_handler.forget(session)
+                logger.info("[final] %s | stop_reason=%s", session.stats_line(), reason)
+                session.muxer.close_logs()
+                session.uploader.write_manifest()
 
-            size = sum(session.output_sizes.values())
-            db_path = next(
-                (f for f in session.output_files if os.path.exists(f)), ""
-            )
+                size = sum(session.output_sizes.values())
+                db_path = next(
+                    (f for f in session.output_files if os.path.exists(f)), ""
+                )
 
-            await asyncio.to_thread(
-                db.finish_recording,
-                recording_id=session.recording_id,
-                file_path=db_path,
-                file_size=size,
-                status=session.status,
-                error_message=session.error,
-                is_video=session.is_video,
-            )
-
-            async with self._state_lock:
-                self.active_sessions.pop(self._session_key(session), None)
+                await asyncio.to_thread(
+                    db.finish_recording,
+                    recording_id=session.recording_id,
+                    file_path=db_path,
+                    file_size=size,
+                    status=session.status,
+                    error_message=session.error,
+                    is_video=session.is_video,
+                )
+            except Exception:
+                logger.exception("Finalize bookkeeping failed user=%s chat=%s recording=%s",
+                                 session.user_id, session.channel_id, session.recording_id)
+            finally:
+                async with self._state_lock:
+                    self.active_sessions.pop(self._session_key(session), None)
 
         if self._completion_callback:
             try:

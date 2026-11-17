@@ -1,11 +1,10 @@
 """Clean up test pipeline artifacts"""
 import shutil, os
 
+base = os.path.join(os.path.dirname(os.path.abspath(__file__)), "recordings")
 dirs_to_remove = [
-    r"c:\Users\User\loyiha\record\recordings\_pipeline_test",
-    r"c:\Users\User\loyiha\record\recordings\_pipeline_test2",
-    r"c:\Users\User\loyiha\record\recordings\_pipeline_test3",
-    r"c:\Users\User\loyiha\record\recordings\_pipeline_debug",
+    os.path.join(base, name)
+    for name in ("_pipeline_test", "_pipeline_test2", "_pipeline_test3", "_pipeline_debug")
 ]
 
 for d in dirs_to_remove:

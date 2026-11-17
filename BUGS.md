@@ -1,5 +1,7 @@
 # Xatolar va yechimlar
 
+- **BUG-021 — Kod tekshiruvi (2026-11-17):** Yakunlash (finalize) paytida manifest/DB xatosi bo‘lsa ham sessiya ro‘yxatdan chiqariladi va akkaunt bo‘shaydi. Yakunlanayotgan sessiya endi “yozuv boshlandi” deb qaytarilmaydi; start aniq xato beradi, waiting rejimi esa saqlanib qayta urinadi. Rejoin stop boshlangach qayta ulanmaydi, kech ulangan bo‘lsa calldan chiqadi. Polling 409 `BotAPIError` ko‘rinishida kelganda ham `deleteWebhook` qayta chaqiriladi. Waiting yozuvi arming paytida olib tashlansa `KeyError` chiqmaydi. `/addaccount` mavjud akkauntni vaqtinchalik xatoda o‘chirmaydi. QR login taski kuzatiladi, thumbnail vaqtinchalik fayli tozalanadi, `check_db.py`/`cleanup.py` Windows yo‘llariga bog‘liq emas, jonli log fayllari repodan chiqarildi. `tests/test_review_fixes.py` (7 test) qo‘shildi; jami 197 test o‘tadi. Jonli xizmatga restartdan keyin kuchga kiradi.
+
 ## Owner/maintenance and conversation logging regression guards (2026-11-12)
 
 - A command-only maintenance gate would leave persisted probes and Telegram
