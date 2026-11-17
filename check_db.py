@@ -1,7 +1,11 @@
 """Check DB schema properly"""
+import os
 import sqlite3
+import sys
 
-db_path = r"c:\Users\User\loyiha\record\recorder.db"
+db_path = sys.argv[1] if len(sys.argv) > 1 else os.path.join(os.path.dirname(os.path.abspath(__file__)), "recorder.db")
+if not os.path.exists(db_path):
+    sys.exit(f"Database not found: {db_path}")
 conn = sqlite3.connect(db_path)
 conn.row_factory = sqlite3.Row
 

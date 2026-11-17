@@ -1096,6 +1096,8 @@ async def start_recording_for_user(
         if owner_controls.blocked(user_id):
             raise MaintenanceActive(MAINTENANCE_NOTICE)
         current = stream_recorder.get_session(user_id, channel_id)
+        if current and getattr(current, "finalizing", False):
+            raise RuntimeError("Bu chatning oldingi yozuvi hali yakunlanmoqda; birozdan so‘ng qayta urinib ko‘ring")
         if current:
             return current
 
@@ -1529,7 +1531,7 @@ async def handle_login_qr(chat_id: int, user_id: int):
             return
         await send_photo(chat_id, image, f"Scan in Telegram Settings > Devices. Expires: {expires}")
         await send_message(chat_id, "⏳ Waiting for QR scan...")
-        asyncio.create_task(wait_for_qr_login(user_id, chat_id))
+        track_background_task(asyncio.create_task(wait_for_qr_login(user_id, chat_id)))
     except Exception as exc:
         await send_message(chat_id, f"❌ QR login error: {exc}")
 
@@ -1686,9 +1688,10 @@ async def start_waiting_for_stream(
     """Waiting mode: primary trigger is the VIDEO_CHAT_STARTED service
     message (event-driven); a slow probe is only a safety net in case the
     userbot misses the service update while reconnecting."""
-    if stream_recorder.get_session(user_id, channel_id) or user_id in waiting_sessions:
+    current = stream_recorder.get_session(user_id, channel_id)
+    if (current and not getattr(current, "finalizing", False)) or user_id in waiting_sessions:
         return
-    waiting_sessions[user_id] = {
+    entry = waiting_sessions[user_id] = {
         "channel_id": channel_id,
         "title": title,
         "chat_id": chat_id,
@@ -1703,9 +1706,11 @@ async def start_waiting_for_stream(
         "Recording will start automatically when the livestream begins.\n"
         "Use /stop to cancel.",
     )
-    waiting_sessions[user_id]["task"] = track_background_task(
-        asyncio.create_task(wait_probe_loop(user_id, channel_id))
-    )
+    # An event handler may have started the recording and removed the entry meanwhile.
+    if waiting_sessions.get(user_id) is entry:
+        entry["task"] = track_background_task(
+            asyncio.create_task(wait_probe_loop(user_id, channel_id))
+        )
 
 
 async def wait_probe_loop(user_id: int, channel_id: int) -> None:
@@ -1716,7 +1721,8 @@ async def wait_probe_loop(user_id: int, channel_id: int) -> None:
         if owner_controls.blocked(user_id):
             await wait_for_next_probe(waiting)
             continue
-        if stream_recorder.get_session(user_id, channel_id):
+        current = stream_recorder.get_session(user_id, channel_id)
+        if current and not getattr(current, "finalizing", False):
             waiting_sessions.pop(user_id, None)
             await asyncio.to_thread(db.delete_waiting, user_id)
             return
@@ -2244,6 +2250,7 @@ async def handle_addaccount(chat_id: int, user_id: int, text: str):
         return
     session_string = args[1].strip()
     label = args[2].strip() if len(args) > 2 else None
+    known_ids = {int(row["account_id"]) for row in await asyncio.to_thread(db.list_accounts, user_id)}
     account_id = await asyncio.to_thread(db.add_account, session_string, label, user_id)
     if account_id is None:
         await send_message(chat_id, "❌ Could not save the account.")
@@ -2251,7 +2258,9 @@ async def handle_addaccount(chat_id: int, user_id: int, text: str):
     # validate immediately
     client = await account_manager.get_client(account_id)
     if not client:
-        await asyncio.to_thread(db.delete_account, account_id)
+        # Re-adding an existing account must not delete it on a transient failure.
+        if account_id not in known_ids:
+            await asyncio.to_thread(db.delete_account, account_id)
         await send_message(chat_id, "❌ Session string invalid or revoked.")
         return
     try:
@@ -2511,7 +2520,8 @@ async def _run_bot():
             for update in response.get("result", []):
                 offset = int(update["update_id"]) + 1
                 dispatcher.submit(update)
-        except urllib.error.HTTPError as exc:
+        except (urllib.error.HTTPError, BotAPIError) as exc:
+            # bot_api turns JSON HTTP errors into BotAPIError, so 409 arrives as either type.
             if exc.code == 409:
                 logger.error("409 Conflict — another polling instance exists. Retrying deleteWebhook...")
                 try:

@@ -67,6 +67,10 @@ class MtprotoUploader:
                 handle.write(thumb)
             return path
         except OSError:
+            try:
+                os.remove(path)
+            except OSError:
+                pass
             return None
 
     @staticmethod
